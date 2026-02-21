@@ -5,6 +5,9 @@
  */
 import {
   CARD_HEIGHT,
+  HERO_UI_FONT,
+  HERO_UI_FONT_SIZE_BAR,
+  HERO_UI_FONT_SIZE_NAME,
   MAX_CHARGE,
   HERO_BAR_WIDTH,
 } from '../config/constants.js';
@@ -73,7 +76,8 @@ export class HeroUI {
     // --- Name (above card) ---
     this.nameText = scene.add
       .text(0, labelY, hero.name, {
-        fontSize: 14,
+        fontSize: HERO_UI_FONT_SIZE_NAME,
+        fontFamily: HERO_UI_FONT,
         color: '#eee',
         align: 'center',
       })
@@ -82,7 +86,7 @@ export class HeroUI {
 
     // --- HP bar (fill grows left → right) ---
     this.hpLabel = scene.add
-      .text(barLeftX - padding, hpBarY, 'HP', { fontSize: 11, color: '#b0b0b0' })
+      .text(barLeftX - padding, hpBarY, 'HP', { fontSize: HERO_UI_FONT_SIZE_BAR, fontFamily: HERO_UI_FONT, color: '#b0b0b0' })
       .setOrigin(1, 0.5);
     this.hpBg = scene.add
       .rectangle(barLeftX, hpBarY, barWidth, barHeight, 0x333333, 0.9)
@@ -99,8 +103,11 @@ export class HeroUI {
       .setOrigin(0, 0.5);
     this.hpValueText = scene.add
       .text(barLeftX - padding + 10, hpBarY + barHeight / 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, {
-        fontSize: 11,
+        fontSize: HERO_UI_FONT_SIZE_BAR,
+        fontFamily: HERO_UI_FONT,
         color: '#e0e0e0',
+        stroke: '#000000',
+        strokeThickness: 1,
       })
       .setOrigin(0, 1);
 
@@ -113,7 +120,7 @@ export class HeroUI {
     // --- ATB / Charge bar (fill grows left → right) ---
     const atbValueOffsetY = barHeight / 2 + 10;
     this.atbLabel = scene.add
-      .text(barLeftX - padding, atbBarY, 'ATB', { fontSize: 11, color: '#b0b0b0' })
+      .text(barLeftX - padding, atbBarY, 'ATB', { fontSize: HERO_UI_FONT_SIZE_BAR, fontFamily: HERO_UI_FONT, color: '#b0b0b0' })
       .setOrigin(1, 0.5);
     this.atbBg = scene.add
       .rectangle(barLeftX, atbBarY, barWidth, barHeight, 0x333333, 0.9)
@@ -123,7 +130,8 @@ export class HeroUI {
       .setOrigin(0, 0.5);
     this.atbValueText = scene.add
       .text(barRightX, atbBarY + atbValueOffsetY, `0% (0/${MAX_CHARGE})`, {
-        fontSize: 11,
+        fontSize: HERO_UI_FONT_SIZE_BAR,
+        fontFamily: HERO_UI_FONT,
         color: '#e0e0e0',
       })
       .setOrigin(0, 0);

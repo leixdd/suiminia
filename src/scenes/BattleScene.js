@@ -13,6 +13,13 @@ import {
   BATTLE_PADDING,
   CARD_WIDTH,
   CARD_HEIGHT,
+  COMMAND_WINDOW_FONT,
+  COMMAND_WINDOW_FONT_SIZE,
+  FONT_SIZE_DAMAGE_POP,
+  FONT_SIZE_DEBUG_UI,
+  FONT_SIZE_TINY,
+  FONT_SIZE_VICTORY,
+  GAME_FONT,
 } from '../config/constants.js';
 
 /** Delay (ms) before AI executes its turn so the player sees it's the AI's turn */
@@ -68,7 +75,7 @@ export class BattleScene extends Phaser.Scene {
 
     // Victory text (hidden until battle end)
     this.victoryText = this.add
-      .text(GAME_WIDTH / 2, 60, '', { fontSize: 28, color: '#f1c40f' })
+      .text(GAME_WIDTH / 2, 60, '', { fontSize: FONT_SIZE_VICTORY, fontFamily: GAME_FONT, color: '#f1c40f' })
       .setOrigin(0.5)
       .setVisible(false);
 
@@ -100,7 +107,8 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(debugDepth);
     this.add
       .text(debugCenterX, debugY - debugHeight / 2 + 4, 'Damage (debug)', {
-        fontSize: 11,
+        fontSize: FONT_SIZE_DEBUG_UI,
+        fontFamily: GAME_FONT,
         color: '#8b949e',
       })
       .setOrigin(0.5, 0)
@@ -154,7 +162,8 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(uiDepth);
     this.instructionText = this.add
       .text(feedbackCenterX, bottomBarY - 14, 'Waiting for a turn — ATB bars are filling.', {
-        fontSize: 13,
+        fontSize: FONT_SIZE_DEBUG_UI,
+        fontFamily: GAME_FONT,
         color: '#ffffff',
         align: 'center',
         wordWrap: { width: feedbackWidth - 24 },
@@ -163,7 +172,8 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(uiDepth + 1);
     this.instructionSubtext = this.add
       .text(feedbackCenterX, bottomBarY + 4, 'Your bar: 0% · Enemy bar: 0% (faster SPD = fills sooner)', {
-        fontSize: 11,
+        fontSize: FONT_SIZE_DEBUG_UI,
+        fontFamily: GAME_FONT,
         color: '#ffffff',
         align: 'center',
         wordWrap: { width: feedbackWidth - 24 },
@@ -187,7 +197,7 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false)
       .setDepth(uiDepth + 1);
     this.guardBtnText = this.add
-      .text(guardX, bottomBarY, 'Guard', { fontSize: 18, color: '#fff' })
+      .text(guardX, bottomBarY, 'Guard', { fontSize: COMMAND_WINDOW_FONT_SIZE, fontFamily: COMMAND_WINDOW_FONT, color: '#fff' })
       .setOrigin(0.5)
       .setVisible(false)
       .setDepth(uiDepth + 1);
@@ -197,7 +207,7 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false)
       .setDepth(uiDepth + 1);
     this.attackBtnText = this.add
-      .text(attackX, bottomBarY, 'Attack', { fontSize: 18, color: '#fff' })
+      .text(attackX, bottomBarY, 'Attack', { fontSize: COMMAND_WINDOW_FONT_SIZE, fontFamily: COMMAND_WINDOW_FONT, color: '#fff' })
       .setOrigin(0.5)
       .setVisible(false)
       .setDepth(uiDepth + 1);
@@ -280,7 +290,7 @@ export class BattleScene extends Phaser.Scene {
     const lineHeight = this.debugLineHeight;
     const y1 = this.debugLogContentHeight;
     const text1 = this.add
-      .text(0, y1, summaryLine, { fontSize: 11, color: '#b0b0b0' })
+      .text(0, y1, summaryLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#b0b0b0' })
       .setOrigin(0, 0);
     this.debugLogContainer.add(text1);
     this.debugLogEntries.push({ text: text1, y: y1 });
@@ -288,7 +298,7 @@ export class BattleScene extends Phaser.Scene {
 
     const y2 = this.debugLogContentHeight;
     const text2 = this.add
-      .text(0, y2, formulaLine, { fontSize: 10, color: '#8b949e' })
+      .text(0, y2, formulaLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#8b949e' })
       .setOrigin(0, 0);
     this.debugLogContainer.add(text2);
     this.debugLogEntries.push({ text: text2, y: y2 });
@@ -368,7 +378,8 @@ export class BattleScene extends Phaser.Scene {
     const endY = startY - 55;
     const dmgText = this.add
       .text(x, startY, `-${fmtNum(amount)}`, {
-        fontSize: 26,
+        fontSize: FONT_SIZE_DAMAGE_POP,
+        fontFamily: GAME_FONT,
         color: '#ffffff',
         fontStyle: 'bold',
       })
