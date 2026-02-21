@@ -1,6 +1,6 @@
 /**
- * BattleScene: 1v1 layout (Player 1 left, Player 2/AI right), hero card placeholders,
- * ATB bars, and Attack command. Drives BattleEngine on update and on player input.
+ * BattleScene: Pokemon-style team battle. 3 heroes per side, one active at a time.
+ * When active dies, player chooses next hero; AI picks randomly.
  */
 import Phaser from 'phaser';
 import { Hero } from '../entities/Hero.js';
@@ -13,23 +13,32 @@ import {
   BATTLE_PADDING,
   CARD_WIDTH,
   CARD_HEIGHT,
+  TEAM_SIZE,
   COMMAND_WINDOW_FONT,
   COMMAND_WINDOW_FONT_SIZE,
   FONT_SIZE_DAMAGE_POP,
   FONT_SIZE_DEBUG_UI,
-  FONT_SIZE_TINY,
   FONT_SIZE_VICTORY,
   GAME_FONT,
 } from '../config/constants.js';
 
-/** Delay (ms) before AI executes its turn so the player sees it's the AI's turn */
 const AI_TURN_DELAY_MS = 600;
-/** Delay (ms) before showing victory so the player sees HP reach 0 */
 const VICTORY_DELAY_MS = 1500;
+const ENEMY_SWITCH_DELAY_MS = 800;
 
-/** Format number for display: integer as-is, otherwise 1 decimal */
 function fmtNum(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function createTeamHeroes(prefix, names, stats) {
+  return names.map((name, i) => new Hero({
+    id: `${prefix}${i + 1}`,
+    name,
+    atk: stats[i].atk,
+    def: stats[i].def,
+    spd: stats[i].spd,
+    maxHp: stats[i].maxHp ?? 100,
+  }));
 }
 
 export class BattleScene extends Phaser.Scene {
@@ -38,48 +47,74 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
-    // --- Heroes (data only) ---
-    const hero1 = new Hero({
-      id: 'player1',
-      name: 'Hero Alpha1',
-      atk: 25,
-      def: 5,
-      spd: 10,
-      maxHp: 100,
-    });
-    const hero2 = new Hero({
-      id: 'player2',
-      name: 'Hero Beta',
-      atk: 20,
-      def: 8,
-      spd: 4,
-      maxHp: 100,
-    });
+    const playerTeam = createTeamHeroes('player', ['Alpha', 'Beta', 'Gamma'], [
+      { atk: 25, def: 5, spd: 10, maxHp: 100 },
+      { atk: 22, def: 8, spd: 7, maxHp: 100 },
+      { atk: 20, def: 10, spd: 5, maxHp: 100 },
+    ]);
+    const enemyTeam = createTeamHeroes('enemy', ['Shadow', 'Blade', 'Fang'], [
+      { atk: 20, def: 8, spd: 4, maxHp: 100 },
+      { atk: 24, def: 6, spd: 6, maxHp: 100 },
+      { atk: 18, def: 9, spd: 9, maxHp: 100 },
+    ]);
 
-    this.hero1 = hero1;
-    this.hero2 = hero2;
-    this.engine = new BattleEngine([hero1, hero2]);
+    this.playerTeam = playerTeam;
+    this.enemyTeam = enemyTeam;
+    this.engine = new BattleEngine(playerTeam, enemyTeam);
 
-    // --- Layout: P1 left, P2 right ---
     const centerY = GAME_HEIGHT / 2;
     const leftX = BATTLE_PADDING + CARD_WIDTH / 2;
     const rightX = GAME_WIDTH - BATTLE_PADDING - CARD_WIDTH / 2;
 
-    // Placeholder cards (clickable)
-    this.card1 = this._makeHeroCard(leftX, centerY, 'player1', 'hero-placeholder');
-    this.card2 = this._makeHeroCard(rightX, centerY, 'player2', 'hero-placeholder-p2');
+    // Active hero cards (one per side)
+    this.playerCard = this._makeHeroCard(leftX, centerY, 'player', 'hero-placeholder');
+    this.enemyCard = this._makeHeroCard(rightX, centerY, 'enemy', 'hero-placeholder-p2');
 
-    // Hero UI: name + HP bar + ATB bar in one entity per hero
-    this.heroUI1 = new HeroUI(this, leftX, centerY, hero1);
-    this.heroUI2 = new HeroUI(this, rightX, centerY, hero2);
+    // Hero UI for active heroes only (rebind on switch)
+    this.playerActiveUI = new HeroUI(this, leftX, centerY, this.engine.getPlayerActive());
+    this.enemyActiveUI = new HeroUI(this, rightX, centerY, this.engine.getEnemyActive());
 
-    // Victory text (hidden until battle end)
+    // Team panels: 3 heroes per side (name + HP), for display and player switch selection
+    const teamPanelWidth = 140;
+    const teamRowHeight = 28;
+    const teamPanelHeight = TEAM_SIZE * teamRowHeight + 16;
+    const playerPanelX = leftX - CARD_WIDTH / 2 - teamPanelWidth / 2 - 20;
+    const enemyPanelX = rightX + CARD_WIDTH / 2 + teamPanelWidth / 2 + 20;
+    const panelY = centerY;
+
+    this.playerTeamRows = [];
+    this.enemyTeamRows = [];
+    for (let i = 0; i < TEAM_SIZE; i++) {
+      const y = panelY - teamPanelHeight / 2 + 16 + i * teamRowHeight + teamRowHeight / 2;
+      const pr = this._addTeamRow(playerPanelX, y, playerTeam[i], i, true);
+      this.playerTeamRows.push(pr);
+      const er = this._addTeamRow(enemyPanelX, y, enemyTeam[i], i, false);
+      this.enemyTeamRows.push(er);
+    }
+
+    // "Choose next hero!" overlay for player (hidden until pendingPlayerSwitch)
+    this.switchOverlay = this.add
+      .rectangle(GAME_WIDTH / 2, centerY, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
+      .setInteractive()
+      .setVisible(false)
+      .setDepth(400);
+    this.switchText = this.add
+      .text(GAME_WIDTH / 2, centerY - 40, 'Choose next hero!', {
+        fontSize: 16,
+        fontFamily: GAME_FONT,
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(401);
+
+    // Victory text
     this.victoryText = this.add
       .text(GAME_WIDTH / 2, 60, '', { fontSize: FONT_SIZE_VICTORY, fontFamily: GAME_FONT, color: '#f1c40f' })
       .setOrigin(0.5)
       .setVisible(false);
 
-    // --- Bottom bar: feedback (4/12) + command (8/12) in grid, side by side ---
+    // Bottom bar
     const uiDepth = 500;
     const barHeight = 56;
     const bottomBarY = GAME_HEIGHT - barHeight / 2;
@@ -89,10 +124,9 @@ export class BattleScene extends Phaser.Scene {
     const commandCenterX = GAME_WIDTH * (4 / 12) + commandWidth / 2;
     const gap = 4;
 
-    // --- Debug window: damage calculation log (12/12 grid, above feedback, scrollable) ---
     const debugDepth = 450;
     const debugHeight = 72;
-    const debugWidth = GAME_WIDTH - 32; // 12/12 full width with margin
+    const debugWidth = GAME_WIDTH - 32;
     const debugCenterX = GAME_WIDTH / 2;
     const debugY = bottomBarY - barHeight / 2 - debugHeight / 2 - 8;
     const debugContentTop = debugY - debugHeight / 2 + 18;
@@ -146,22 +180,17 @@ export class BattleScene extends Phaser.Scene {
       const { left, right, top, bottom } = this.debugLogPanelBounds;
       if (pointer.x >= left && pointer.x <= right && pointer.y >= top && pointer.y <= bottom) {
         const maxScroll = Math.max(0, this.debugLogContentHeight - debugContentHeight);
-        this.debugLogScroll = Phaser.Math.Clamp(
-          this.debugLogScroll + deltaY,
-          0,
-          maxScroll
-        );
+        this.debugLogScroll = Phaser.Math.Clamp(this.debugLogScroll + deltaY, 0, maxScroll);
         this._updateDebugLogScroll();
       }
     });
 
-    // Feedback window (4/12) — left panel
     this.add
       .rectangle(feedbackCenterX, bottomBarY, feedbackWidth - gap / 2, barHeight, 0x2c3e50, 0.95)
       .setStrokeStyle(2, 0x5d6d7e)
       .setDepth(uiDepth);
     this.instructionText = this.add
-      .text(feedbackCenterX, bottomBarY - 14, 'Waiting for a turn — ATB bars are filling.', {
+      .text(feedbackCenterX, bottomBarY - 14, 'Waiting for a turn.', {
         fontSize: FONT_SIZE_DEBUG_UI,
         fontFamily: GAME_FONT,
         color: '#ffffff',
@@ -171,7 +200,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(uiDepth + 1);
     this.instructionSubtext = this.add
-      .text(feedbackCenterX, bottomBarY + 4, 'Your bar: 0% · Enemy bar: 0% (faster SPD = fills sooner)', {
+      .text(feedbackCenterX, bottomBarY + 4, '', {
         fontSize: FONT_SIZE_DEBUG_UI,
         fontFamily: GAME_FONT,
         color: '#ffffff',
@@ -181,11 +210,6 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(uiDepth + 1);
 
-    // Command window (8/12) — right panel, Guard + Attack buttons
-    this.add
-      .rectangle(commandCenterX, bottomBarY, commandWidth - gap / 2, barHeight, 0x1e2a38, 0.95)
-      .setStrokeStyle(2, 0x5d6d7e)
-      .setDepth(uiDepth);
     const btnW = 100;
     const btnH = 40;
     const btnGap = 16;
@@ -219,15 +243,35 @@ export class BattleScene extends Phaser.Scene {
     this.attackBtn.on('pointerover', () => this.attackBtn.setAlpha(0.9));
     this.attackBtn.on('pointerout', () => this.attackBtn.setAlpha(1));
 
-    // AI: avoid scheduling multiple times per turn
     this._aiScheduled = false;
-    // Victory: delay so HP can be seen at 0 before result
     this._victoryScheduled = false;
+    this._enemySwitchScheduled = false;
+  }
+
+  _addTeamRow(x, y, hero, index, isPlayer) {
+    const bg = this.add
+      .rectangle(x, y, 130, 24, 0x1a1a2e, 0.9)
+      .setStrokeStyle(1, 0x3a3a5c)
+      .setDepth(350);
+    const nameText = this.add
+      .text(x - 60, y, hero.name, { fontSize: 8, fontFamily: GAME_FONT, color: '#ccc' })
+      .setOrigin(0, 0.5)
+      .setDepth(351);
+    const hpText = this.add
+      .text(x + 55, y, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, { fontSize: 8, fontFamily: GAME_FONT, color: '#aaa' })
+      .setOrigin(1, 0.5)
+      .setDepth(351);
+    const zone = this.add
+      .rectangle(x, y, 130, 24, 0x000000, 0)
+      .setInteractive({ useHandCursor: isPlayer })
+      .setDepth(352);
+    return { bg, nameText, hpText, zone, hero, index, isPlayer };
   }
 
   update() {
     if (this.engine.isBattleOver()) {
       this._syncBars();
+      this._syncTeamPanels();
       if (!this._victoryScheduled) {
         this._victoryScheduled = true;
         this.time.delayedCall(VICTORY_DELAY_MS, () => this._showVictory());
@@ -235,14 +279,38 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    // Enemy switch: AI picks next hero after short delay
+    if (this.engine.pendingEnemySwitch && !this._enemySwitchScheduled) {
+      this._enemySwitchScheduled = true;
+      this.time.delayedCall(ENEMY_SWITCH_DELAY_MS, () => {
+        this.engine.selectNextEnemyHeroRandom();
+        this.enemyActiveUI.setHero(this.engine.getEnemyActive());
+        this._enemySwitchScheduled = false;
+      });
+      return;
+    }
+
+    // Player switch: show overlay and wait for click on team row (handled in _onTeamRowClicked)
+    if (this.engine.pendingPlayerSwitch) {
+      this.switchOverlay.setVisible(true);
+      this.switchText.setVisible(true);
+      this._syncTeamPanels();
+      return;
+    }
+    this.switchOverlay.setVisible(false);
+    this.switchText.setVisible(false);
+
     this.engine.tick();
+    this.playerActiveUI.setHero(this.engine.getPlayerActive());
+    this.enemyActiveUI.setHero(this.engine.getEnemyActive());
     this._syncBars();
+    this._syncTeamPanels();
     this._updateAttackButtonVisibility();
     this._updateTurnInstructions();
 
-    // When it's Player 2's turn, schedule AI action once (with delay for readability)
     const current = this.engine.currentTurnHero;
-    if (current?.id === 'player2' && !this._aiScheduled) {
+    const isEnemyTurn = current && this.enemyTeam.includes(current);
+    if (isEnemyTurn && !this._aiScheduled) {
       this._aiScheduled = true;
       this.time.delayedCall(AI_TURN_DELAY_MS, () => {
         this._executeAI();
@@ -251,29 +319,58 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  _makeHeroCard(x, y, heroId, textureKey) {
+  _makeHeroCard(x, y, side, textureKey) {
     const card = this.add
       .image(x, y, textureKey)
       .setDisplaySize(CARD_WIDTH, CARD_HEIGHT)
       .setInteractive({ useHandCursor: true })
-      .setData('heroId', heroId);
+      .setData('side', side);
     card.on('pointerover', () => card.setTint(0xcccccc));
     card.on('pointerout', () => card.clearTint());
     return card;
   }
 
   _syncBars() {
-    this.heroUI1.sync();
-    this.heroUI2.sync();
-    this.card1.setAlpha(this.hero1.alive ? 1 : 0.4);
-    this.card2.setAlpha(this.hero2.alive ? 1 : 0.4);
+    this.playerActiveUI.sync();
+    this.enemyActiveUI.sync();
+    const pActive = this.engine.getPlayerActive();
+    const eActive = this.engine.getEnemyActive();
+    this.playerCard.setAlpha(pActive.alive ? 1 : 0.4);
+    this.enemyCard.setAlpha(eActive.alive ? 1 : 0.4);
   }
 
-  /**
-   * Add a line to the damage debug log and trim if over max. Newest at bottom.
-   * Includes formula line: effective_def = def + (def × 0.1) when guard; damage = max(1, atk - effective_def).
-   * @param {{ atk: number, baseDef?: number, effectiveDef: number, damage: number, attacker: { name: string }, target: { name: string }, guarded?: boolean }} result
-   */
+  _syncTeamPanels() {
+    const pActive = this.engine.getPlayerActive();
+    const eActive = this.engine.getEnemyActive();
+    for (const row of this.playerTeamRows) {
+      row.nameText.setText(row.hero.name);
+      row.hpText.setText(`${fmtNum(row.hero.currentHp)}/${fmtNum(row.hero.maxHp)}`);
+      row.nameText.setColor(row.hero.alive ? '#eee' : '#666');
+      row.hpText.setColor(row.hero.alive ? '#aaa' : '#666');
+      const isActive = row.hero === pActive;
+      row.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0x3498db : 0x3a3a5c);
+      row.zone.off('pointerdown');
+      if (this.engine.pendingPlayerSwitch && row.hero.alive) {
+        row.zone.on('pointerdown', () => this._onTeamRowClicked(row.index, true));
+      }
+    }
+    for (const row of this.enemyTeamRows) {
+      row.nameText.setText(row.hero.name);
+      row.hpText.setText(`${fmtNum(row.hero.currentHp)}/${fmtNum(row.hero.maxHp)}`);
+      row.nameText.setColor(row.hero.alive ? '#eee' : '#666');
+      row.hpText.setColor(row.hero.alive ? '#aaa' : '#666');
+      const isActive = row.hero === eActive;
+      row.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0xe74c3c : 0x3a3a5c);
+    }
+  }
+
+  _onTeamRowClicked(index, isPlayer) {
+    if (!isPlayer || !this.engine.pendingPlayerSwitch) return;
+    if (this.engine.selectNextPlayerHero(index)) {
+      this.playerActiveUI.setHero(this.engine.getPlayerActive());
+    }
+  }
+
   _addDamageLogEntry(result) {
     if (result.attacker == null || result.atk == null || result.effectiveDef == null) return;
     const baseDef = result.baseDef ?? result.effectiveDef;
@@ -282,28 +379,21 @@ export class BattleScene extends Phaser.Scene {
     let formulaLine;
     if (result.guarded) {
       const defTerm = `${baseDef} + (${baseDef} × 0.1)`;
-      formulaLine = `  effective_def = ${defTerm} = ${fmtNum(result.effectiveDef)}; max(1, atk - effective_def) = max(1, ${result.atk} - ${fmtNum(result.effectiveDef)}) = ${fmtNum(result.damage)}`;
+      formulaLine = `  effective_def = ${defTerm} = ${fmtNum(result.effectiveDef)}; max(1, atk - effective_def) = ${fmtNum(result.damage)}`;
     } else {
       formulaLine = `  max(1, atk - def) = max(1, ${result.atk} - ${fmtNum(result.effectiveDef)}) = ${fmtNum(result.damage)}`;
     }
-
     const lineHeight = this.debugLineHeight;
-    const y1 = this.debugLogContentHeight;
-    const text1 = this.add
-      .text(0, y1, summaryLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#b0b0b0' })
-      .setOrigin(0, 0);
+    let y1 = this.debugLogContentHeight;
+    const text1 = this.add.text(0, y1, summaryLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#b0b0b0' }).setOrigin(0, 0);
     this.debugLogContainer.add(text1);
     this.debugLogEntries.push({ text: text1, y: y1 });
     this.debugLogContentHeight += lineHeight;
-
     const y2 = this.debugLogContentHeight;
-    const text2 = this.add
-      .text(0, y2, formulaLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#8b949e' })
-      .setOrigin(0, 0);
+    const text2 = this.add.text(0, y2, formulaLine, { fontSize: FONT_SIZE_DEBUG_UI, fontFamily: GAME_FONT, color: '#8b949e' }).setOrigin(0, 0);
     this.debugLogContainer.add(text2);
     this.debugLogEntries.push({ text: text2, y: y2 });
     this.debugLogContentHeight += lineHeight;
-
     while (this.debugLogEntries.length > this.debugMaxLines) {
       const old = this.debugLogEntries.shift();
       old.text.destroy();
@@ -315,64 +405,53 @@ export class BattleScene extends Phaser.Scene {
       }
       this.debugLogContentHeight = this.debugLogEntries.length * lineHeight;
     }
-
-    this.debugLogScroll = Math.max(
-      0,
-      this.debugLogContentHeight - this.debugContentHeight
-    );
+    this.debugLogScroll = Math.max(0, this.debugLogContentHeight - this.debugContentHeight);
     this._updateDebugLogScroll();
   }
 
   _updateDebugLogScroll() {
     this.debugLogContainer.y =
-      this.debugContentTop +
-      this.debugContentHeight -
-      this.debugLogContentHeight +
-      this.debugLogScroll;
+      this.debugContentTop + this.debugContentHeight - this.debugLogContentHeight + this.debugLogScroll;
   }
 
   _updateAttackButtonVisibility() {
     const current = this.engine.currentTurnHero;
-    const isPlayer1Turn = current && current.id === 'player1';
-    const canAct = isPlayer1Turn && !this.engine.isBattleOver();
+    const isPlayerTurn = current && this.playerTeam.includes(current);
+    const canAct = isPlayerTurn && !this.engine.isBattleOver() && !this.engine.pendingPlayerSwitch;
     this.attackBtn.setVisible(canAct);
     this.attackBtnText.setVisible(canAct);
     this.guardBtn.setVisible(canAct);
     this.guardBtnText.setVisible(canAct);
   }
 
-  /**
-   * Update the on-screen instructions to describe current turn state and what to do next.
-   */
   _updateTurnInstructions() {
     if (this.engine.isBattleOver()) {
       this.instructionText.setText('Battle over.');
       this.instructionSubtext.setText('');
       return;
     }
-
+    if (this.engine.pendingPlayerSwitch) {
+      this.instructionText.setText('Choose your next hero!');
+      this.instructionSubtext.setText('Click an alive hero in the team panel.');
+      return;
+    }
     const current = this.engine.currentTurnHero;
-    const pct1 = Math.round(this.hero1.chargeProgress() * 100);
-    const pct2 = Math.round(this.hero2.chargeProgress() * 100);
-
-    if (current?.id === 'player1') {
+    const pActive = this.engine.getPlayerActive();
+    const eActive = this.engine.getEnemyActive();
+    const pct1 = Math.round(pActive.chargeProgress() * 100);
+    const pct2 = Math.round(eActive.chargeProgress() * 100);
+    if (current && this.playerTeam.includes(current)) {
       this.instructionText.setText("Your turn — choose an action.");
       this.instructionSubtext.setText("Attack or Guard (+10% DEF until your next turn).");
-    } else if (current?.id === 'player2') {
+    } else if (current && this.enemyTeam.includes(current)) {
       this.instructionText.setText("Enemy's turn.");
-      this.instructionSubtext.setText("They will attack in a moment.");
+      this.instructionSubtext.setText("They will act in a moment.");
     } else {
       this.instructionText.setText("Waiting for a turn — ATB bars are filling.");
-      this.instructionSubtext.setText(`Your bar: ${pct1}% · Enemy bar: ${pct2}% (faster SPD = fills sooner)`);
+      this.instructionSubtext.setText(`Your bar: ${pct1}% · Enemy bar: ${pct2}%`);
     }
   }
 
-  /**
-   * Ragnarok-style damage pop: floats up with ease-in-out, scale pop (ease-out), then fades.
-   * @param {number} x - World x (e.g. target card center)
-   * @param {number} y - World y (e.g. above target card)
-   * @param {number} amount - Damage value to display (e.g. result.damage)
-   */
   _showDamagePop(x, y, amount) {
     const startY = y - 15;
     const endY = startY - 55;
@@ -386,16 +465,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScale(0.5)
       .setDepth(600);
-
-    // Pop scale: small -> slight overshoot -> settle (ease-out, like RO)
-    this.tweens.add({
-      targets: dmgText,
-      scale: 1.15,
-      duration: 280,
-      ease: 'Back.Out',
-    });
-
-    // Float up + fade (ease-in-out: smooth start and end)
+    this.tweens.add({ targets: dmgText, scale: 1.15, duration: 280, ease: 'Back.Out' });
     this.tweens.add({
       targets: dmgText,
       y: endY,
@@ -406,15 +476,13 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Run Player 2 AI: get action and execute (attack player1). Same damage feedback as player.
-   */
   _executeAI() {
     if (this.engine.isBattleOver()) return;
     const current = this.engine.currentTurnHero;
-    if (!current || current.id !== 'player2') return;
+    if (!current || !this.enemyTeam.includes(current)) return;
 
-    const action = getAIAction(current, [this.hero1]);
+    const playerActive = this.engine.getPlayerActive();
+    const action = getAIAction(current, [playerActive]);
     if (!action || action.type === 'pass') {
       this.engine.actPass();
       return;
@@ -423,48 +491,40 @@ export class BattleScene extends Phaser.Scene {
       this.engine.actGuard();
       return;
     }
-
-    const target = action.targetId === 'player1' ? this.hero1 : this.hero2;
-    if (!target.alive) {
+    const target = action.targetId === playerActive.id ? playerActive : this.playerTeam.find((h) => h.id === action.targetId);
+    if (!target?.alive) {
       this.engine.actPass();
       return;
     }
-
     const result = this.engine.actAttack(target);
     this._addDamageLogEntry(result);
     if (result.damage > 0) {
-      const targetCard = target.id === 'player1' ? this.card1 : this.card2;
-      this._showDamagePop(targetCard.x, targetCard.y, result.damage);
+      this._showDamagePop(this.playerCard.x, this.playerCard.y, result.damage);
     }
   }
 
   _onGuardClicked() {
     const current = this.engine.currentTurnHero;
-    if (!current || current.id !== 'player1') return;
+    if (!current || !this.playerTeam.includes(current)) return;
     this.engine.actGuard();
   }
 
   _onAttackClicked() {
     const current = this.engine.currentTurnHero;
-    if (!current || current.id !== 'player1') return;
-
-    // Attack is always directed at the enemy (Player 2)
-    const target = this.hero2;
+    if (!current || !this.playerTeam.includes(current)) return;
+    const target = this.engine.getEnemyActive();
     if (!target.alive) return;
-
     const result = this.engine.actAttack(target);
     this._addDamageLogEntry(result);
     if (result.damage > 0) {
-      this._showDamagePop(this.card2.x, this.card2.y, result.damage);
+      this._showDamagePop(this.enemyCard.x, this.enemyCard.y, result.damage);
     }
   }
 
   _showVictory() {
     if (this.victoryText.visible) return;
-    const winnerId = this.engine.getVictor();
-    const message = winnerId
-      ? (winnerId === 'player1' ? 'Player 1 wins!' : 'Player 2 wins!')
-      : 'Draw!';
+    const winner = this.engine.getVictor();
+    const message = winner === 'player' ? 'You win!' : winner === 'enemy' ? 'Enemy wins!' : 'Draw!';
     this.victoryText.setText(message).setVisible(true);
   }
 }

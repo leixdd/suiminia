@@ -193,6 +193,11 @@ export class HeroUI {
       .setVisible(hero.alive);
   }
 
+  /** Rebind to a different hero (e.g. when switching active in team battle) */
+  setHero(hero) {
+    this.hero = hero;
+  }
+
   /** Set visibility of the entire hero UI container */
   setVisible(visible) {
     this.container.setVisible(visible);

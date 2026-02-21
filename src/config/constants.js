@@ -16,6 +16,9 @@ export const MIN_DAMAGE = 0;
 export const GAME_WIDTH = 800;
 export const GAME_HEIGHT = 600;
 
+/** Team size (Pokemon-style: 3 heroes per side, one active at a time) */
+export const TEAM_SIZE = 3;
+
 /** Battle layout: horizontal padding for hero card areas */
 export const BATTLE_PADDING = 100;
 /** Approximate card width for placeholder layout */

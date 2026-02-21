@@ -1,31 +1,60 @@
 /**
- * Core Battle Engine: ties together TurnQueue, DamageCalculator, and Hero state.
- * Manages ATB ticks, turn execution (e.g. Attack), and win/loss state.
- * Designed to be driven by BattleScene (scene calls tick/act when appropriate).
+ * Core Battle Engine: team battle (Pokemon-style).
+ * Two teams of 3 heroes; one "active" per side. Only active heroes get turns and can be targeted.
+ * When active dies, that side must choose next hero (player picks, AI picks randomly).
  */
 import { TurnQueue } from './TurnQueue.js';
 import { DamageCalculator } from './DamageCalculator.js';
 
 export class BattleEngine {
   /**
-   * @param {import('../entities/Hero.js').Hero[]} heroes - [player1Hero, player2Hero]
+   * @param {import('../entities/Hero.js').Hero[]} playerTeam - 3 heroes
+   * @param {import('../entities/Hero.js').Hero[]} enemyTeam - 3 heroes
    */
-  constructor(heroes) {
-    this.heroes = heroes;
-    this.turnQueue = new TurnQueue(heroes);
-    /** Current actor (who must choose an action); set when someone becomes ready */
+  constructor(playerTeam, enemyTeam) {
+    this.playerTeam = playerTeam;
+    this.enemyTeam = enemyTeam;
+    this.playerActiveIndex = 0;
+    this.enemyActiveIndex = 0;
+    this.turnQueue = new TurnQueue(this._getActiveHeroes());
+    /** Current actor (who must choose an action) */
     this.currentTurnHero = null;
-    /** Battle over when one side has no alive heroes */
+    /** 'player' | 'enemy' | null when battle over */
     this.victorId = null;
+    /** When true, player must select next hero before battle continues */
+    this.pendingPlayerSwitch = false;
+    /** When true, AI will select next hero (scene triggers then we clear) */
+    this.pendingEnemySwitch = false;
+  }
+
+  _getActiveHeroes() {
+    return [
+      this.playerTeam[this.playerActiveIndex],
+      this.enemyTeam[this.enemyActiveIndex],
+    ];
+  }
+
+  _rebuildTurnQueue() {
+    this.turnQueue = new TurnQueue(this._getActiveHeroes());
+  }
+
+  /** @returns {import('../entities/Hero.js').Hero} */
+  getPlayerActive() {
+    return this.playerTeam[this.playerActiveIndex];
+  }
+
+  /** @returns {import('../entities/Hero.js').Hero} */
+  getEnemyActive() {
+    return this.enemyTeam[this.enemyActiveIndex];
   }
 
   /**
-   * Advance ATB by one tick. Call every frame or on a timer from the scene.
-   * If no one is currently acting and someone becomes ready, sets currentTurnHero.
+   * Advance ATB by one tick. If in switch phase, no-op until switch is done.
    */
   tick() {
     if (this.victorId !== null) return;
-    if (this.currentTurnHero !== null) return; // wait for player to choose action
+    if (this.pendingPlayerSwitch || this.pendingEnemySwitch) return;
+    if (this.currentTurnHero !== null) return;
 
     this.turnQueue.tick();
     this.currentTurnHero = this.turnQueue.getCurrentTurn();
@@ -33,10 +62,7 @@ export class BattleEngine {
 
   /**
    * Execute an attack: currentTurnHero attacks targetHero.
-   * Applies damage, consumes the turn (resets charge), then clears currentTurnHero.
-   * @param {import('../entities/Hero.js').Hero} targetHero
-   * @param {Object} [options] - Passed to DamageCalculator (e.g. multiplier)
-   * @returns {{ damage: number, targetAlive: boolean }}
+   * If target is the active hero and dies, sets pending switch for that side.
    */
   actAttack(targetHero, options = {}) {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) {
@@ -47,7 +73,7 @@ export class BattleEngine {
     }
 
     const effectiveDef = targetHero.guarding
-      ? (targetHero.def + (targetHero.def * 0.1)) // +10% DEF
+      ? (targetHero.def + (targetHero.def * 0.1))
       : targetHero.def;
     this.currentTurnHero.clearGuarding();
     const damage = DamageCalculator.calculate(
@@ -60,8 +86,25 @@ export class BattleEngine {
     const previousTurn = this.currentTurnHero;
     this.currentTurnHero = null;
 
-    this.turnQueue.tickUntilReady();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    const targetWasPlayerActive =
+      this.playerTeam.includes(targetHero) &&
+      this.playerTeam[this.playerActiveIndex] === targetHero;
+    const targetWasEnemyActive =
+      this.enemyTeam.includes(targetHero) &&
+      this.enemyTeam[this.enemyActiveIndex] === targetHero;
+
+    if (targetHero.alive) {
+      this.turnQueue.tickUntilReady();
+      this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    } else {
+      if (targetWasPlayerActive) this.pendingPlayerSwitch = true;
+      if (targetWasEnemyActive) this.pendingEnemySwitch = true;
+      if (!this.pendingPlayerSwitch && !this.pendingEnemySwitch) {
+        this.turnQueue.tickUntilReady();
+        this.currentTurnHero = this.turnQueue.getCurrentTurn();
+      }
+    }
+
     this._checkVictory();
 
     const baseDef = targetHero.def;
@@ -77,9 +120,6 @@ export class BattleEngine {
     };
   }
 
-  /**
-   * Guard: +10% DEF on incoming damage until the hero's next action. Consumes the turn.
-   */
   actGuard() {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) return;
     this.currentTurnHero.startGuarding();
@@ -89,9 +129,6 @@ export class BattleEngine {
     this.currentTurnHero = this.turnQueue.getCurrentTurn();
   }
 
-  /**
-   * Skip / pass turn (for future "Item" etc.).
-   */
   actPass() {
     if (this.currentTurnHero === null) return;
     this.currentTurnHero.clearGuarding();
@@ -101,20 +138,55 @@ export class BattleEngine {
     this.currentTurnHero = this.turnQueue.getCurrentTurn();
   }
 
+  /**
+   * Player selects which hero to send next. Valid only when pendingPlayerSwitch.
+   * @param {number} index - 0..2, must be alive and not already active
+   */
+  selectNextPlayerHero(index) {
+    if (!this.pendingPlayerSwitch) return false;
+    if (index < 0 || index >= this.playerTeam.length) return false;
+    const hero = this.playerTeam[index];
+    if (!hero.alive) return false;
+    this.playerActiveIndex = index;
+    this._rebuildTurnQueue();
+    this.pendingPlayerSwitch = false;
+    this.turnQueue.tickUntilReady();
+    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    return true;
+  }
+
+  /**
+   * AI selects a random alive enemy hero to send next. Valid only when pendingEnemySwitch.
+   */
+  selectNextEnemyHeroRandom() {
+    if (!this.pendingEnemySwitch) return false;
+    const alive = this.enemyTeam
+      .map((h, i) => ({ hero: h, i }))
+      .filter(({ hero }) => hero.alive);
+    if (alive.length === 0) return false;
+    const chosen = alive[Math.floor(Math.random() * alive.length)];
+    this.enemyActiveIndex = chosen.i;
+    this._rebuildTurnQueue();
+    this.pendingEnemySwitch = false;
+    this.turnQueue.tickUntilReady();
+    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    return true;
+  }
+
   /** @returns {boolean} */
   isBattleOver() {
     return this.victorId !== null;
   }
 
-  /** @returns {string | null} Winner hero id, or null */
+  /** @returns {'player' | 'enemy' | null} */
   getVictor() {
     return this.victorId;
   }
 
   _checkVictory() {
-    const alive = this.heroes.filter((h) => h.alive);
-    if (alive.length <= 1) {
-      this.victorId = alive.length === 1 ? alive[0].id : null;
-    }
+    const playerAlive = this.playerTeam.filter((h) => h.alive).length;
+    const enemyAlive = this.enemyTeam.filter((h) => h.alive).length;
+    if (playerAlive === 0) this.victorId = 'enemy';
+    else if (enemyAlive === 0) this.victorId = 'player';
   }
 }
