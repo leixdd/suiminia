@@ -11,9 +11,39 @@ import {
 
 /** Lerp factor for ATB bar fill animation */
 const ATB_FILL_LERP = 0.08;
+/** Lerp factor for HP bar fill (decrease/increase animation) */
+const HP_FILL_LERP = 0.12;
 
 function fmtNum(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+/** HP bar colors: green > 51%, yellow 50–51%, orange at 25%, red at 15% (with lerp between) */
+const HP_COLOR_GREEN = 0x2ecc71;
+const HP_COLOR_YELLOW = 0xf1c40f;
+const HP_COLOR_ORANGE = 0xe67e22;
+const HP_COLOR_RED = 0xe74c3c;
+
+function lerpColor(t, colorA, colorB) {
+  t = Math.max(0, Math.min(1, t));
+  const r = Math.round(((colorA >> 16) & 0xff) + (((colorB >> 16) & 0xff) - ((colorA >> 16) & 0xff)) * t);
+  const g = Math.round(((colorA >> 8) & 0xff) + (((colorB >> 8) & 0xff) - ((colorA >> 8) & 0xff)) * t);
+  const b = Math.round((colorA & 0xff) + ((colorB & 0xff) - (colorA & 0xff)) * t);
+  return (r << 16) | (g << 8) | b;
+}
+
+function getHpBarColor(ratio) {
+  if (ratio > 0.51) return HP_COLOR_GREEN;
+  if (ratio >= 0.5) return HP_COLOR_YELLOW;
+  if (ratio >= 0.25) {
+    const t = (ratio - 0.25) / 0.25;
+    return lerpColor(t, HP_COLOR_ORANGE, HP_COLOR_YELLOW);
+  }
+  if (ratio >= 0.15) {
+    const t = (ratio - 0.15) / 0.1;
+    return lerpColor(t, HP_COLOR_RED, HP_COLOR_ORANGE);
+  }
+  return HP_COLOR_RED;
 }
 
 export class HeroUI {
@@ -58,7 +88,14 @@ export class HeroUI {
       .rectangle(barLeftX, hpBarY, barWidth, barHeight, 0x333333, 0.9)
       .setOrigin(0, 0.5);
     this.hpFill = scene.add
-      .rectangle(barLeftX, hpBarY, barWidth * (hero.currentHp / hero.maxHp), barHeight, 0x2ecc71, 1)
+      .rectangle(
+        barLeftX,
+        hpBarY,
+        barWidth * (hero.currentHp / hero.maxHp),
+        barHeight,
+        getHpBarColor(hero.currentHp / hero.maxHp),
+        1
+      )
       .setOrigin(0, 0.5);
     this.hpValueText = scene.add
       .text(barRightX, hpBarY - barHeight / 2 - 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, {
@@ -70,6 +107,8 @@ export class HeroUI {
     this.container.add([this.hpLabel, this.hpBg, this.hpFill, this.hpValueText]);
     this._hpBarWidth = barWidth;
     this._hpBarHeight = barHeight;
+    /** Display HP ratio 0..1, lerped for smooth decrease/increase animation */
+    this._displayHpRatio = hero.currentHp / hero.maxHp;
 
     // --- ATB / Charge bar (fill grows left → right) ---
     const atbValueOffsetY = barHeight / 2 + 10;
@@ -104,8 +143,11 @@ export class HeroUI {
 
     this.nameText.setText(hero.name);
 
-    const hpRatio = hero.currentHp / hero.maxHp;
-    this.hpFill.width = this._hpBarWidth * hpRatio;
+    const targetHpRatio = hero.currentHp / hero.maxHp;
+    this._displayHpRatio += (targetHpRatio - this._displayHpRatio) * HP_FILL_LERP;
+    this._displayHpRatio = Math.max(0, Math.min(1, this._displayHpRatio));
+    this.hpFill.setFillStyle(getHpBarColor(targetHpRatio), 1);
+    this.hpFill.width = this._hpBarWidth * this._displayHpRatio;
     this.hpFill.height = this._hpBarHeight;
     this.hpFill.setOrigin(0, 0.5);
     this.hpFill.visible = hero.alive;
