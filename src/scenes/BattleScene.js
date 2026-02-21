@@ -75,21 +75,22 @@ export class BattleScene extends Phaser.Scene {
     this.playerActiveUI = new HeroUI(this, leftX, centerY, this.engine.getPlayerActive());
     this.enemyActiveUI = new HeroUI(this, rightX, centerY, this.engine.getEnemyActive());
 
-    // Team panels: 3 heroes per side (name + HP), for display and player switch selection
-    const teamPanelWidth = 140;
-    const teamRowHeight = 28;
-    const teamPanelHeight = TEAM_SIZE * teamRowHeight + 16;
-    const playerPanelX = leftX - CARD_WIDTH / 2 - teamPanelWidth / 2 - 20;
-    const enemyPanelX = rightX + CARD_WIDTH / 2 + teamPanelWidth / 2 + 20;
-    const panelY = centerY;
+    // Party panels at top: small squares with HP bar inside (player left, enemy right)
+    const partyBoxSize = 52;
+    const partyBoxGap = 10;
+    const partyY = 38;
+    const partyDepth = 350;
+    const playerPartyStartX = 60 + partyBoxSize / 2;
+    const enemyPartyStartX = GAME_WIDTH - 60 - (TEAM_SIZE * partyBoxSize + (TEAM_SIZE - 1) * partyBoxGap) + partyBoxSize / 2;
 
     this.playerTeamRows = [];
     this.enemyTeamRows = [];
     for (let i = 0; i < TEAM_SIZE; i++) {
-      const y = panelY - teamPanelHeight / 2 + 16 + i * teamRowHeight + teamRowHeight / 2;
-      const pr = this._addTeamRow(playerPanelX, y, playerTeam[i], i, true);
+      const px = playerPartyStartX + i * (partyBoxSize + partyBoxGap);
+      const ex = enemyPartyStartX + i * (partyBoxSize + partyBoxGap);
+      const pr = this._addPartyBox(px, partyY, partyBoxSize, partyDepth, playerTeam[i], i, true);
       this.playerTeamRows.push(pr);
-      const er = this._addTeamRow(enemyPanelX, y, enemyTeam[i], i, false);
+      const er = this._addPartyBox(ex, partyY, partyBoxSize, partyDepth, enemyTeam[i], i, false);
       this.enemyTeamRows.push(er);
     }
 
@@ -258,24 +259,33 @@ export class BattleScene extends Phaser.Scene {
     this._switchWindowOpen = false;
   }
 
-  _addTeamRow(x, y, hero, index, isPlayer) {
+  _addPartyBox(centerX, centerY, boxSize, depth, hero, index, isPlayer) {
+    const pad = 3;
+    const hpBarH = 6;
+    const hpBarY = centerY + boxSize / 2 - pad - hpBarH / 2;
+    const hpBarW = boxSize - pad * 2;
+
     const bg = this.add
-      .rectangle(x, y, 130, 24, 0x1a1a2e, 0.9)
+      .rectangle(centerX, centerY, boxSize, boxSize, 0x1a1a2e, 0.95)
       .setStrokeStyle(1, 0x3a3a5c)
-      .setDepth(350);
-    const nameText = this.add
-      .text(x - 60, y, hero.name, { fontSize: 8, fontFamily: GAME_FONT, color: '#ccc' })
+      .setDepth(depth);
+    const hpBarBg = this.add
+      .rectangle(centerX, hpBarY, hpBarW, hpBarH, 0x333333, 1)
+      .setOrigin(0.5, 0.5)
+      .setDepth(depth + 1);
+    const hpBarFill = this.add
+      .rectangle(centerX - hpBarW / 2 + 1, hpBarY, hpBarW * (hero.currentHp / hero.maxHp), hpBarH - 2, 0x2ecc71, 1)
       .setOrigin(0, 0.5)
-      .setDepth(351);
-    const hpText = this.add
-      .text(x + 55, y, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, { fontSize: 8, fontFamily: GAME_FONT, color: '#aaa' })
-      .setOrigin(1, 0.5)
-      .setDepth(351);
+      .setDepth(depth + 1);
+    const nameText = this.add
+      .text(centerX, centerY - boxSize / 2 + 8, hero.name, { fontSize: 6, fontFamily: GAME_FONT, color: '#ccc' })
+      .setOrigin(0.5, 0)
+      .setDepth(depth + 1);
     const zone = this.add
-      .rectangle(x, y, 130, 24, 0x000000, 0)
+      .rectangle(centerX, centerY, boxSize, boxSize, 0x000000, 0)
       .setInteractive({ useHandCursor: isPlayer })
-      .setDepth(352);
-    return { bg, nameText, hpText, zone, hero, index, isPlayer };
+      .setDepth(depth + 2);
+    return { bg, hpBarBg, hpBarFill, nameText, zone, hero, index, isPlayer, hpBarW, hpBarH };
   }
 
   update() {
@@ -357,9 +367,12 @@ export class BattleScene extends Phaser.Scene {
     const eActive = this.engine.getEnemyActive();
     for (const row of this.playerTeamRows) {
       row.nameText.setText(row.hero.name);
-      row.hpText.setText(`${fmtNum(row.hero.currentHp)}/${fmtNum(row.hero.maxHp)}`);
       row.nameText.setColor(row.hero.alive ? '#eee' : '#666');
-      row.hpText.setColor(row.hero.alive ? '#aaa' : '#666');
+      const ratio = row.hero.maxHp > 0 ? row.hero.currentHp / row.hero.maxHp : 0;
+      row.hpBarFill.width = Math.max(0, (row.hpBarW - 2) * ratio);
+      row.hpBarFill.setFillStyle(this._hpBarColor(ratio), 1);
+      row.hpBarFill.visible = row.hero.alive;
+      row.hpBarBg.visible = row.hero.alive;
       const isActive = row.hero === pActive;
       row.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0x3498db : 0x3a3a5c);
       row.zone.off('pointerdown');
@@ -369,12 +382,21 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const row of this.enemyTeamRows) {
       row.nameText.setText(row.hero.name);
-      row.hpText.setText(`${fmtNum(row.hero.currentHp)}/${fmtNum(row.hero.maxHp)}`);
       row.nameText.setColor(row.hero.alive ? '#eee' : '#666');
-      row.hpText.setColor(row.hero.alive ? '#aaa' : '#666');
+      const ratio = row.hero.maxHp > 0 ? row.hero.currentHp / row.hero.maxHp : 0;
+      row.hpBarFill.width = Math.max(0, (row.hpBarW - 2) * ratio);
+      row.hpBarFill.setFillStyle(this._hpBarColor(ratio), 1);
+      row.hpBarFill.visible = row.hero.alive;
+      row.hpBarBg.visible = row.hero.alive;
       const isActive = row.hero === eActive;
       row.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0xe74c3c : 0x3a3a5c);
     }
+  }
+
+  _hpBarColor(ratio) {
+    if (ratio > 0.5) return 0x2ecc71;
+    if (ratio > 0.25) return 0xf1c40f;
+    return 0xe74c3c;
   }
 
   _onTeamRowClicked(index, isPlayer) {
