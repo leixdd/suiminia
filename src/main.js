@@ -1,11 +1,12 @@
 /**
  * Phaser 3.90.0 game entry.
- * Scene order: Boot -> Preload -> BattleScene.
+ * Scene order: Boot -> Preload -> Title -> Battle.
  */
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from './config/constants.js';
 import { BootScene } from './scenes/BootScene.js';
 import { PreloadScene } from './scenes/PreloadScene.js';
+import { TitleScene } from './scenes/TitleScene.js';
 import { BattleScene } from './scenes/BattleScene.js';
 
 const config = {
@@ -22,7 +23,7 @@ const config = {
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, PreloadScene, BattleScene],
+  scene: [BootScene, PreloadScene, TitleScene, BattleScene],
 };
 
 const game = new Phaser.Game(config);
