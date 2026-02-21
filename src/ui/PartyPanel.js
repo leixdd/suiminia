@@ -1,0 +1,119 @@
+/**
+ * PartyPanel: top bar showing player and enemy team as small squares with HP bars.
+ * Player slots are clickable when switch-hero is pending.
+ */
+import { GAME_WIDTH, TEAM_SIZE, GAME_FONT } from '../config/constants.js';
+
+const BOX_SIZE = 52;
+const BOX_GAP = 10;
+const PANEL_Y = 38;
+const DEPTH = 350;
+const PAD = 3;
+const HP_BAR_H = 6;
+
+function hpBarColor(ratio) {
+  if (ratio > 0.5) return 0x2ecc71;
+  if (ratio > 0.25) return 0xf1c40f;
+  return 0xe74c3c;
+}
+
+export class PartyPanel {
+  /**
+   * @param {Phaser.Scene} scene
+   * @param {{
+   *   getPlayerTeam: () => import('../entities/Hero.js').Hero[],
+   *   getEnemyTeam: () => import('../entities/Hero.js').Hero[],
+   *   getPlayerActive: () => import('../entities/Hero.js').Hero,
+   *   getEnemyActive: () => import('../entities/Hero.js').Hero,
+   *   isPendingPlayerSwitch: () => boolean,
+   *   onPlayerSlotClick: (index: number) => void,
+   * }} options
+   */
+  constructor(scene, options) {
+    this.scene = scene;
+    this.getPlayerTeam = options.getPlayerTeam;
+    this.getEnemyTeam = options.getEnemyTeam;
+    this.getPlayerActive = options.getPlayerActive;
+    this.getEnemyActive = options.getEnemyActive;
+    this.isPendingPlayerSwitch = options.isPendingPlayerSwitch;
+    this.onPlayerSlotClick = options.onPlayerSlotClick;
+
+    const playerStartX = 60 + BOX_SIZE / 2;
+    const enemyStartX =
+      GAME_WIDTH - 60 - (TEAM_SIZE * BOX_SIZE + (TEAM_SIZE - 1) * BOX_GAP) + BOX_SIZE / 2;
+
+    this.playerSlots = [];
+    this.enemySlots = [];
+    for (let i = 0; i < TEAM_SIZE; i++) {
+      this.playerSlots.push(
+        this._createSlot(playerStartX + i * (BOX_SIZE + BOX_GAP), PANEL_Y, options.getPlayerTeam()[i], i, true)
+      );
+      this.enemySlots.push(
+        this._createSlot(enemyStartX + i * (BOX_SIZE + BOX_GAP), PANEL_Y, options.getEnemyTeam()[i], i, false)
+      );
+    }
+  }
+
+  _createSlot(centerX, centerY, hero, index, isPlayer) {
+    const scene = this.scene;
+    const hpBarW = BOX_SIZE - PAD * 2;
+    const hpBarY = centerY + BOX_SIZE / 2 - PAD - HP_BAR_H / 2;
+
+    const bg = scene.add
+      .rectangle(centerX, centerY, BOX_SIZE, BOX_SIZE, 0x1a1a2e, 0.95)
+      .setStrokeStyle(1, 0x3a3a5c)
+      .setDepth(DEPTH);
+    const hpBarBg = scene.add
+      .rectangle(centerX, hpBarY, hpBarW, HP_BAR_H, 0x333333, 1)
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH + 1);
+    const hpBarFill = scene.add
+      .rectangle(centerX - hpBarW / 2 + 1, hpBarY, hpBarW * (hero.currentHp / hero.maxHp), HP_BAR_H - 2, 0x2ecc71, 1)
+      .setOrigin(0, 0.5)
+      .setDepth(DEPTH + 1);
+    const nameText = scene.add
+      .text(centerX, centerY - BOX_SIZE / 2 + 8, hero.name, { fontSize: 6, fontFamily: GAME_FONT, color: '#ccc' })
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH + 1);
+    const zone = scene.add
+      .rectangle(centerX, centerY, BOX_SIZE, BOX_SIZE, 0x000000, 0)
+      .setInteractive({ useHandCursor: isPlayer })
+      .setDepth(DEPTH + 2);
+
+    return { bg, hpBarBg, hpBarFill, nameText, zone, hero, index, isPlayer, hpBarW };
+  }
+
+  sync() {
+    const pActive = this.getPlayerActive();
+    const eActive = this.getEnemyActive();
+    const pendingSwitch = this.isPendingPlayerSwitch();
+
+    for (const slot of this.playerSlots) {
+      slot.nameText.setText(slot.hero.name);
+      slot.nameText.setColor(slot.hero.alive ? '#eee' : '#666');
+      const ratio = slot.hero.maxHp > 0 ? slot.hero.currentHp / slot.hero.maxHp : 0;
+      slot.hpBarFill.width = Math.max(0, (slot.hpBarW - 2) * ratio);
+      slot.hpBarFill.setFillStyle(hpBarColor(ratio), 1);
+      slot.hpBarFill.visible = slot.hero.alive;
+      slot.hpBarBg.visible = slot.hero.alive;
+      const isActive = slot.hero === pActive;
+      slot.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0x3498db : 0x3a3a5c);
+      slot.zone.off('pointerdown');
+      if (pendingSwitch && slot.hero.alive) {
+        slot.zone.on('pointerdown', () => this.onPlayerSlotClick(slot.index));
+      }
+    }
+
+    for (const slot of this.enemySlots) {
+      slot.nameText.setText(slot.hero.name);
+      slot.nameText.setColor(slot.hero.alive ? '#eee' : '#666');
+      const ratio = slot.hero.maxHp > 0 ? slot.hero.currentHp / slot.hero.maxHp : 0;
+      slot.hpBarFill.width = Math.max(0, (slot.hpBarW - 2) * ratio);
+      slot.hpBarFill.setFillStyle(hpBarColor(ratio), 1);
+      slot.hpBarFill.visible = slot.hero.alive;
+      slot.hpBarBg.visible = slot.hero.alive;
+      const isActive = slot.hero === eActive;
+      slot.bg.setStrokeStyle(isActive ? 2 : 1, isActive ? 0xe74c3c : 0x3a3a5c);
+    }
+  }
+}
