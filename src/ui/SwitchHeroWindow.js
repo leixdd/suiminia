@@ -1,6 +1,6 @@
 /**
  * SwitchHeroWindow: modal "Choose next hero" UI with keyboard (1/2/3, arrows+Enter) and mouse.
- * Used when the player must or wants to switch the active hero (after KO or voluntary switch).
+ * Stats of the currently selected hero are shown on the right; arrow keys scroll through selection.
  */
 import {
   GAME_WIDTH,
@@ -10,11 +10,17 @@ import {
 } from '../config/constants.js';
 
 const DEPTH = 400;
-const PANEL_W = 320;
+const PANEL_W = 500;
 const PANEL_H = 200;
-const ROW_W = 260;
+const LIST_CENTER_OFFSET = -130;
+const STATS_CENTER_OFFSET = 130;
+const ROW_W = 220;
 const ROW_H = 28;
 const ROW_SPACING = 36;
+const STATS_LINE_HEIGHT = 22;
+const FONT_SIZE_ROW = 10;
+const FONT_SIZE_STATS = 10;
+const FONT_SIZE_STATS_HEADER = 12;
 
 function fmtNum(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -36,6 +42,8 @@ export class SwitchHeroWindow {
     const cy = GAME_HEIGHT / 2;
     const panelX = cx;
     const panelY = cy;
+    const listX = panelX + LIST_CENTER_OFFSET;
+    const statsX = panelX + STATS_CENTER_OFFSET;
     const rowStartY = panelY - PANEL_H / 2 + 44;
 
     this.overlay = scene.add
@@ -51,8 +59,8 @@ export class SwitchHeroWindow {
       .setDepth(DEPTH + 1);
 
     this.title = scene.add
-      .text(panelX, panelY - PANEL_H / 2 + 22, 'Choose next hero!', {
-        fontSize: 12,
+      .text(listX, panelY - PANEL_H / 2 + 22, 'Choose next hero!', {
+        fontSize: FONT_SIZE_STATS_HEADER,
         fontFamily: GAME_FONT,
         color: '#f1c40f',
       })
@@ -63,16 +71,73 @@ export class SwitchHeroWindow {
     this.optionRows = [];
     for (let i = 0; i < TEAM_SIZE; i++) {
       const y = rowStartY + i * ROW_SPACING + ROW_H / 2;
-      this.optionRows.push(this._createRow(panelX, y, i));
+      this.optionRows.push(this._createRow(listX, y, i));
     }
 
     this.hint = scene.add
-      .text(panelX, panelY + PANEL_H / 2 - 22, '1 / 2 / 3 or click  ·  \u2191\u2193 + Enter', {
+      .text(listX, panelY + PANEL_H / 2 - 22, '1 / 2 / 3 or click  ·  \u2191\u2193 scroll, Enter', {
         fontSize: 8,
         fontFamily: GAME_FONT,
         color: '#8b949e',
       })
       .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+
+    // Stats panel (right side): shows selected hero's stats
+    const statsStartY = panelY - PANEL_H / 2 + 50;
+    this.statsTitle = scene.add
+      .text(statsX, statsStartY, 'Stats', {
+        fontSize: FONT_SIZE_STATS_HEADER,
+        fontFamily: GAME_FONT,
+        color: '#3498db',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+    this.statsName = scene.add
+      .text(statsX, statsStartY + STATS_LINE_HEIGHT, '', {
+        fontSize: FONT_SIZE_STATS,
+        fontFamily: GAME_FONT,
+        color: '#e0e0e0',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+    this.statsAtk = scene.add
+      .text(statsX, statsStartY + STATS_LINE_HEIGHT * 2, '', {
+        fontSize: FONT_SIZE_STATS,
+        fontFamily: GAME_FONT,
+        color: '#b0b0b0',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+    this.statsDef = scene.add
+      .text(statsX, statsStartY + STATS_LINE_HEIGHT * 3, '', {
+        fontSize: FONT_SIZE_STATS,
+        fontFamily: GAME_FONT,
+        color: '#b0b0b0',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+    this.statsSpd = scene.add
+      .text(statsX, statsStartY + STATS_LINE_HEIGHT * 4, '', {
+        fontSize: FONT_SIZE_STATS,
+        fontFamily: GAME_FONT,
+        color: '#b0b0b0',
+      })
+      .setOrigin(0.5, 0)
+      .setVisible(false)
+      .setDepth(DEPTH + 2);
+    this.statsHp = scene.add
+      .text(statsX, statsStartY + STATS_LINE_HEIGHT * 5, '', {
+        fontSize: FONT_SIZE_STATS,
+        fontFamily: GAME_FONT,
+        color: '#b0b0b0',
+      })
+      .setOrigin(0.5, 0)
       .setVisible(false)
       .setDepth(DEPTH + 2);
   }
@@ -85,17 +150,17 @@ export class SwitchHeroWindow {
       .setVisible(false)
       .setDepth(DEPTH + 2);
     const keyText = scene.add
-      .text(centerX - ROW_W / 2 + 14, y, `[${index + 1}]`, { fontSize: 10, fontFamily: GAME_FONT, color: '#8b949e' })
+      .text(centerX - ROW_W / 2 + 14, y, `[${index + 1}]`, { fontSize: FONT_SIZE_ROW, fontFamily: GAME_FONT, color: '#8b949e' })
       .setOrigin(0, 0.5)
       .setVisible(false)
       .setDepth(DEPTH + 3);
     const nameText = scene.add
-      .text(centerX - ROW_W / 2 + 50, y, '', { fontSize: 10, fontFamily: GAME_FONT, color: '#e0e0e0' })
+      .text(centerX - ROW_W / 2 + 50, y, '', { fontSize: FONT_SIZE_ROW, fontFamily: GAME_FONT, color: '#e0e0e0' })
       .setOrigin(0, 0.5)
       .setVisible(false)
       .setDepth(DEPTH + 3);
     const hpText = scene.add
-      .text(centerX + ROW_W / 2 - 14, y, '', { fontSize: 10, fontFamily: GAME_FONT, color: '#aaa' })
+      .text(centerX + ROW_W / 2 - 14, y, '', { fontSize: FONT_SIZE_ROW, fontFamily: GAME_FONT, color: '#aaa' })
       .setOrigin(1, 0.5)
       .setVisible(false)
       .setDepth(DEPTH + 3);
@@ -116,6 +181,7 @@ export class SwitchHeroWindow {
     this.panel.setVisible(true);
     this.title.setVisible(true);
     this.hint.setVisible(true);
+    this._setStatsVisible(true);
 
     for (const row of this.optionRows) {
       row.bg.setVisible(true);
@@ -136,6 +202,7 @@ export class SwitchHeroWindow {
     this.panel.setVisible(false);
     this.title.setVisible(false);
     this.hint.setVisible(false);
+    this._setStatsVisible(false);
     for (const row of this.optionRows) {
       row.bg.setVisible(false);
       row.keyText.setVisible(false);
@@ -144,6 +211,15 @@ export class SwitchHeroWindow {
       row.zone.setVisible(false);
     }
     this.scene.input.keyboard.off('keydown', this._keyDownHandler);
+  }
+
+  _setStatsVisible(visible) {
+    this.statsTitle.setVisible(visible);
+    this.statsName.setVisible(visible);
+    this.statsAtk.setVisible(visible);
+    this.statsDef.setVisible(visible);
+    this.statsSpd.setVisible(visible);
+    this.statsHp.setVisible(visible);
   }
 
   sync() {
@@ -158,6 +234,18 @@ export class SwitchHeroWindow {
       const selected = this.selectedIndex === row.index;
       row.bg.setStrokeStyle(selected ? 2 : 1, hero.alive && selected ? 0x3498db : 0x3a3a5c);
     }
+    this._updateStatsPanel(team);
+  }
+
+  _updateStatsPanel(team) {
+    const hero = team[this.selectedIndex];
+    if (!hero) return;
+    this.statsName.setText(hero.name);
+    this.statsAtk.setText(`ATK  ${hero.atk}`);
+    this.statsDef.setText(`DEF  ${hero.def}`);
+    this.statsSpd.setText(`SPD  ${hero.spd}`);
+    this.statsHp.setText(`HP   ${fmtNum(hero.currentHp)} / ${fmtNum(hero.maxHp)}`);
+    this.statsName.setColor(hero.alive ? '#e0e0e0' : '#666');
   }
 
   _onRowClick(index) {
@@ -186,12 +274,14 @@ export class SwitchHeroWindow {
       return;
     }
     if (key === 38) {
+      event.preventDefault();
       const idx = aliveIndices.indexOf(this.selectedIndex);
       const prev = idx <= 0 ? aliveIndices.length - 1 : idx - 1;
       this.selectedIndex = aliveIndices[prev];
       return;
     }
     if (key === 40) {
+      event.preventDefault();
       const idx = aliveIndices.indexOf(this.selectedIndex);
       const next = idx < 0 || idx >= aliveIndices.length - 1 ? 0 : idx + 1;
       this.selectedIndex = aliveIndices[next];
