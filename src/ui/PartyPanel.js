@@ -1,5 +1,6 @@
 /**
  * PartyPanel: top bar showing player and enemy team as small squares with HP bars.
+ * Boxes animate in from top with ease-in, one by one.
  * Player slots are clickable when switch-hero is pending.
  */
 import { GAME_WIDTH, TEAM_SIZE, GAME_FONT } from '../config/constants.js';
@@ -10,6 +11,10 @@ const PANEL_Y = 38;
 const DEPTH = 350;
 const PAD = 3;
 const HP_BAR_H = 6;
+const DROP_OFFSET = 48;
+const STAGGER_MS = 70;
+const TWEEN_DURATION = 280;
+const EASE = 'Quad.In';
 
 function hpBarColor(ratio) {
   if (ratio > 0.5) return 0x2ecc71;
@@ -37,6 +42,7 @@ export class PartyPanel {
     this.getEnemyActive = options.getEnemyActive;
     this.isPendingPlayerSwitch = options.isPendingPlayerSwitch;
     this.onPlayerSlotClick = options.onPlayerSlotClick;
+    this._playInDone = false;
 
     const playerStartX = 60 + BOX_SIZE / 2;
     const enemyStartX =
@@ -57,30 +63,65 @@ export class PartyPanel {
   _createSlot(centerX, centerY, hero, index, isPlayer) {
     const scene = this.scene;
     const hpBarW = BOX_SIZE - PAD * 2;
-    const hpBarY = centerY + BOX_SIZE / 2 - PAD - HP_BAR_H / 2;
+    const hpBarY = BOX_SIZE / 2 - PAD - HP_BAR_H / 2;
+
+    const container = scene.add.container(centerX, centerY - DROP_OFFSET);
+    container.setDepth(DEPTH);
+    container.alpha = 0;
 
     const bg = scene.add
-      .rectangle(centerX, centerY, BOX_SIZE, BOX_SIZE, 0x1a1a2e, 0.95)
+      .rectangle(0, 0, BOX_SIZE, BOX_SIZE, 0x1a1a2e, 0.95)
       .setStrokeStyle(1, 0x3a3a5c)
-      .setDepth(DEPTH);
+      .setOrigin(0.5, 0.5);
     const hpBarBg = scene.add
-      .rectangle(centerX, hpBarY, hpBarW, HP_BAR_H, 0x333333, 1)
-      .setOrigin(0.5, 0.5)
-      .setDepth(DEPTH + 1);
+      .rectangle(0, hpBarY, hpBarW, HP_BAR_H, 0x333333, 1)
+      .setOrigin(0.5, 0.5);
     const hpBarFill = scene.add
-      .rectangle(centerX - hpBarW / 2 + 1, hpBarY, hpBarW * (hero.currentHp / hero.maxHp), HP_BAR_H - 2, 0x2ecc71, 1)
-      .setOrigin(0, 0.5)
-      .setDepth(DEPTH + 1);
+      .rectangle(-hpBarW / 2 + 1, hpBarY, hpBarW * (hero.currentHp / hero.maxHp), HP_BAR_H - 2, 0x2ecc71, 1)
+      .setOrigin(0, 0.5);
     const nameText = scene.add
-      .text(centerX, centerY - BOX_SIZE / 2 + 8, hero.name, { fontSize: 6, fontFamily: GAME_FONT, color: '#ccc' })
-      .setOrigin(0.5, 0)
-      .setDepth(DEPTH + 1);
+      .text(0, -BOX_SIZE / 2 + 8, hero.name, { fontSize: 6, fontFamily: GAME_FONT, color: '#ccc' })
+      .setOrigin(0.5, 0);
     const zone = scene.add
-      .rectangle(centerX, centerY, BOX_SIZE, BOX_SIZE, 0x000000, 0)
-      .setInteractive({ useHandCursor: isPlayer })
-      .setDepth(DEPTH + 2);
+      .rectangle(0, 0, BOX_SIZE, BOX_SIZE, 0x000000, 0)
+      .setInteractive({ useHandCursor: isPlayer });
 
-    return { bg, hpBarBg, hpBarFill, nameText, zone, hero, index, isPlayer, hpBarW };
+    container.add([bg, hpBarBg, hpBarFill, nameText, zone]);
+
+    return {
+      container,
+      bg,
+      hpBarBg,
+      hpBarFill,
+      nameText,
+      zone,
+      hero,
+      index,
+      isPlayer,
+      hpBarW,
+      centerY,
+    };
+  }
+
+  /**
+   * Play top-down ease-in animation for all boxes, one by one.
+   * Call once when the battle UI is ready (e.g. from scene create).
+   */
+  playIn() {
+    if (this._playInDone) return;
+    this._playInDone = true;
+
+    const allSlots = [...this.playerSlots, ...this.enemySlots];
+    allSlots.forEach((slot, i) => {
+      this.scene.tweens.add({
+        targets: slot.container,
+        y: slot.centerY,
+        alpha: 1,
+        duration: TWEEN_DURATION,
+        delay: i * STAGGER_MS,
+        ease: EASE,
+      });
+    });
   }
 
   sync() {

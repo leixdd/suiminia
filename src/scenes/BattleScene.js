@@ -101,6 +101,8 @@ export class BattleScene extends Phaser.Scene {
       onSwitch: () => this._onSwitchClicked(),
     });
 
+    this.time.delayedCall(200, () => this.partyPanel.playIn());
+
     this._aiScheduled = false;
     this._victoryScheduled = false;
     this._enemySwitchScheduled = false;
