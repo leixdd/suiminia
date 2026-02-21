@@ -9,8 +9,17 @@ export const MAX_CHARGE = 100;
 /** How much charge is added per engine tick (scale SPD by this for feel) */
 export const CHARGE_PER_TICK = 1;
 
+/** When a hero receives damage, their ATB bar is reduced by this ratio (0..1). 0.25 = lose 25% of the bar. */
+export const ATB_DAMAGE_DRAWBACK = 0.001;
+
+/** When a hero attacks, their ATB is set to this negative ratio of MAX_CHARGE, so they must fill more before acting again. 0.25 = start at -25%. */
+export const ATTACKER_ATB_DRAWBACK = 0.25;
+
 /** Minimum damage any attack can deal */
 export const MIN_DAMAGE = 0;
+
+/** When guarding, defender's DEF is multiplied by this value (e.g. 1.1 = +10% DEF). */
+export const GUARD_DEF_MULTIPLIER = 1.1;
 
 /** Default game dimensions (Phaser config) */
 export const GAME_WIDTH = 800;

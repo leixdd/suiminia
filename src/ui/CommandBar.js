@@ -78,9 +78,10 @@ export class CommandBar {
       .setInteractive({ useHandCursor: true })
       .setVisible(false)
       .setDepth(UI_DEPTH + 1);
+    btn.setData('enabled', true);
     btn.on('pointerdown', onClick);
-    btn.on('pointerover', () => btn.setAlpha(0.9));
-    btn.on('pointerout', () => btn.setAlpha(1));
+    btn.on('pointerover', () => { if (btn.getData('enabled')) btn.setAlpha(0.9); });
+    btn.on('pointerout', () => btn.setAlpha(btn.getData('enabled') ? 1 : 0.45));
     return btn;
   }
 
@@ -108,5 +109,18 @@ export class CommandBar {
     this.guardBtnText.setVisible(visible);
     this.switchBtn.setVisible(visible);
     this.switchBtnText.setVisible(visible);
+  }
+
+  /** When false, buttons are dimmed and not clickable (ATB filling or not player turn). */
+  setButtonsEnabled(enabled) {
+    const alpha = enabled ? 1 : 0.45;
+    [this.attackBtn, this.attackBtnText, this.guardBtn, this.guardBtnText, this.switchBtn, this.switchBtnText].forEach((o) => {
+      o.setAlpha(alpha);
+    });
+    [this.attackBtn, this.guardBtn, this.switchBtn].forEach((btn) => {
+      btn.setData('enabled', enabled);
+      if (enabled) btn.setInteractive({ useHandCursor: true });
+      else btn.disableInteractive();
+    });
   }
 }

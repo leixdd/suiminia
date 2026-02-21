@@ -2,7 +2,7 @@
  * Damage calculation: FinalDamage = max(MIN_DAMAGE, ATK - DEF).
  * Kept in a dedicated class so modifiers (buffs, armor break, etc.) can be added later.
  */
-import { MIN_DAMAGE } from '../config/constants.js';
+import { MIN_DAMAGE, GUARD_DEF_MULTIPLIER } from '../config/constants.js';
 
 export class DamageCalculator {
   /**
@@ -21,7 +21,7 @@ export class DamageCalculator {
 
   /**
    * Convenience: compute damage from one Hero to another.
-   * If defender is guarding, uses DEF × 1.1 (+10% DEF).
+   * If defender is guarding, uses DEF × GUARD_DEF_MULTIPLIER.
    * @param {import('../entities/Hero.js').Hero} attacker
    * @param {import('../entities/Hero.js').Hero} defender
    * @param {Object} [options]
@@ -29,7 +29,7 @@ export class DamageCalculator {
    */
   static fromHeroToHero(attacker, defender, options = {}) {
     let def = defender.def;
-    if (defender.guarding) def = def * 1.1;
+    if (defender.guarding) def = def * GUARD_DEF_MULTIPLIER;
     return this.calculate(attacker.atk, def, options);
   }
 }

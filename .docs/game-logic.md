@@ -1,230 +1,153 @@
 # Game Logic — Mini Hero Battle
 
-This document describes the whole game logic: constants, entities, combat math, turn system, battle engine, AI, and scene flow.
+This document describes the core game logic: constants, entities, combat math, turn system, teams, and victory.
 
 ---
 
 ## 1. Constants (`src/config/constants.js`)
 
-Central tuning and layout values.
-
 | Constant | Value | Meaning |
 |----------|--------|---------|
-| `MAX_CHARGE` | 100 | ATB charge needed (points) before a hero can act |
-| `CHARGE_PER_TICK` | 1 | Scale factor for charge gain per tick (charge += SPD × this) |
-| `MIN_DAMAGE` | 1 | Minimum damage any attack can deal |
+| `MAX_CHARGE` | 100 | ATB charge (points) needed before a hero can act |
+| `CHARGE_PER_TICK` | 1 | Charge gain per tick: `charge += SPD × CHARGE_PER_TICK` |
+| `MIN_DAMAGE` | 0 | Minimum damage any attack can deal |
+| `GUARD_DEF_MULTIPLIER` | 1.1 | When guarding, defender's DEF is multiplied by this (+10% DEF) |
+| `TEAM_SIZE` | 3 | Heroes per team (Pokémon-style) |
+| `ATB_DAMAGE_DRAWBACK` | 0.25 | When a hero receives damage, their ATB bar is reduced by this ratio (25% of the bar) |
+| `ATTACKER_ATB_DRAWBACK` | 0.25 | When a hero attacks, their ATB is set to this negative ratio of the bar (must fill from -25% to 100%) |
 | `GAME_WIDTH` | 800 | Canvas width |
 | `GAME_HEIGHT` | 600 | Canvas height |
-| `BATTLE_PADDING` | 80 | Horizontal padding for hero card areas |
-| `CARD_WIDTH` | 120 | Placeholder card width |
-| `CARD_HEIGHT` | 160 | Placeholder card height |
+| `BATTLE_PADDING` | 100 | Horizontal padding for hero card areas |
+| `CARD_WIDTH` / `CARD_HEIGHT` | 120 / 160 | Placeholder card size |
+| `HERO_BAR_WIDTH` | 120 | HP/ATB bar width |
+| `GAME_FONT` | "Press Start 2P" | Default font |
 
 ---
 
 ## 2. Hero Entity (`src/entities/Hero.js`)
 
-Hero is the only combat unit. It holds stats, HP, and ATB state.
+Single combat unit: stats, HP, ATB charge, and guard state.
 
 ### Constructor options
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique id (e.g. `'player1'`, `'player2'`) |
+| `id` | string | Unique id (e.g. `'player1'`, `'enemy2'`) |
 | `name` | string | Display name |
-| `atk` | number | Raw attack value |
+| `atk` | number | Attack value |
 | `def` | number | Defense (subtracted from incoming damage) |
-| `spd` | number | Speed; charge rate for ATB (clamped ≥ 1) |
+| `spd` | number | Speed; ATB charge rate (clamped ≥ 1) |
 | `maxHp` | number | Max HP (default 100) |
 | `currentHp` | number | Current HP (defaults to maxHp) |
 
 ### Instance state
 
-- **charge** (0..MAX_CHARGE): ATB progress; when ≥ MAX_CHARGE the hero can act.
+- **charge** (0..MAX_CHARGE): ATB progress; at MAX_CHARGE the hero can act.
 - **alive**: `currentHp > 0`.
-- **guarding**: When true, incoming damage uses +10% DEF until the hero's next action.
+- **guarding**: When true, incoming damage uses DEF × GUARD_DEF_MULTIPLIER until the hero’s next action.
 
 ### Methods
 
 | Method | Description |
 |--------|-------------|
 | `isReady()` | `alive && charge >= MAX_CHARGE` |
-| `consumeTurn()` | Sets `charge = 0` (call after acting) |
-| `startGuarding()` | Sets `guarding = true` (+10% DEF on incoming damage) |
-| `clearGuarding()` | Sets `guarding = false` (e.g. when attacking or passing) |
-| `takeDamage(amount)` | Applies damage (decimal allowed), updates `currentHp` (can be decimal) and `alive`, returns actual damage |
+| `consumeTurn()` | Sets `charge = 0` (after acting) |
+| `startGuarding()` | Sets `guarding = true` (DEF × GUARD_DEF_MULTIPLIER) |
+| `clearGuarding()` | Sets `guarding = false` |
+| `takeDamage(amount)` | Applies damage, updates `currentHp` and `alive` |
 | `heal(amount)` | Increases `currentHp` up to `maxHp` |
-| `chargeProgress()` | Returns charge as 0..1 for UI bar |
+| `chargeProgress()` | Returns charge as 0..1 for UI |
 
 ---
 
 ## 3. Damage (`src/battle/DamageCalculator.js`)
 
-All damage uses the same formula and a single entry point.
+Single formula for all damage.
 
 ### Formula
 
 ```
-raw     = max(0, ATK - DEF)
-base   = max(MIN_DAMAGE, raw)
-final  = max(MIN_DAMAGE, floor(base × multiplier))
+raw   = max(0, ATK - DEF)
+base  = max(MIN_DAMAGE, raw)
+final = max(MIN_DAMAGE, base × multiplier)
 ```
 
-So: **FinalDamage = max(1, ATK - DEF)** when `multiplier` is 1. Damage is not floored; decimals are allowed.
+With guard: defender uses **DEF × GUARD_DEF_MULTIPLIER** (e.g. 1.1 = +10%) instead of DEF.
+
+### ATB damage drawback (defender)
+
+When a hero **receives** damage, their ATB charge is reduced by **25% of the bar** (configurable via `ATB_DAMAGE_DRAWBACK`). So: `charge = max(0, charge - MAX_CHARGE × ATB_DAMAGE_DRAWBACK)`. This only affects the ATB bar, not HP or other stats.
+
+### ATB drawback (attacker)
+
+When a hero **attacks**, their ATB is set to a **negative** value: `charge = -MAX_CHARGE × ATTACKER_ATB_DRAWBACK` (e.g. -25% of the bar). They must then fill from that value back up to MAX_CHARGE before acting again, so attacking delays their next turn. Guard and Pass do not apply this penalty (they still use the normal consumeTurn() to 0).
 
 ### API
 
 - **`DamageCalculator.calculate(atk, def, options?)`**  
-  - `options.multiplier`: optional damage multiplier (default 1).  
-  - Returns final damage (integer ≥ MIN_DAMAGE).
+  - `options.multiplier`: optional (default 1).  
+  - Returns final damage (≥ MIN_DAMAGE).
 
 - **`DamageCalculator.fromHeroToHero(attacker, defender, options?)`**  
-  - Uses `attacker.atk` and effective defender DEF: if `defender.guarding` then DEF × 1.1 (+10%), else `defender.def`; same formula and options.
+  - Uses attacker ATK and defender effective DEF (×1.1 if guarding).
 
 ---
 
 ## 4. Turn Queue — ATB (`src/battle/TurnQueue.js`)
 
-Turn order is driven by ATB (Active Time Battle): each hero has a charge bar that fills over time. Who acts is whoever is “ready” (charge ≥ MAX_CHARGE). The queue does not advance time; the battle engine does that.
+Turn order by ATB: charge fills over time; whoever reaches MAX_CHARGE first acts.
 
-### Constructor
-
-- **`new TurnQueue(heroes)`**  
-  - `heroes`: array of `Hero` instances (e.g. [player1, player2]).
-
-### Charge update
-
-- **`tick()`**  
-  - For each alive hero: `charge = min(MAX_CHARGE, charge + spd × CHARGE_PER_TICK)`.
-
-### Who can act
-
-- **`getReady()`**  
-  - Returns all heroes with `isReady()`, sorted by charge (desc), then by SPD (desc).
-
-- **`getCurrentTurn()`**  
-  - Returns the first hero from `getReady()`, or `null` if none.
-
-- **`hasReadyHero()`**  
-  - True if at least one hero is ready.
-
-### Advancing until someone is ready
-
-- **`tickUntilReady(maxTicks?)`**  
-  - Calls `tick()` repeatedly until `hasReadyHero()` or `maxTicks` (default 1000).  
-  - Returns `true` if someone is ready.
+- **`new TurnQueue(heroes)`** — `heroes`: array of **active** heroes only (e.g. two: player active, enemy active).
+- **`tick()`** — For each alive hero: `charge = min(MAX_CHARGE, charge + spd × CHARGE_PER_TICK)`.
+- **`getReady()`** — Heroes with `isReady()`, sorted by charge (desc), then SPD (desc).
+- **`getCurrentTurn()`** — First ready hero, or `null`.
+- **`tickUntilReady(maxTicks?)`** — Repeatedly `tick()` until someone is ready (or max ticks).
 
 ---
 
-## 5. Battle Engine (`src/battle/BattleEngine.js`)
+## 5. Teams and active hero
 
-The engine wires together heroes, turn queue, and damage. The scene calls `tick()` and `actAttack()` / `actPass()`.
-
-### Constructor
-
-- **`new BattleEngine(heroes)`**  
-  - `heroes`: e.g. `[player1Hero, player2Hero]`.  
-  - Creates internal `TurnQueue`, sets `currentTurnHero = null`, `victorId = null`.
-
-### Turn flow
-
-- **`tick()`**  
-  - If battle over or `currentTurnHero !== null`, no-op.  
-  - Otherwise: run `turnQueue.tick()`, then set `currentTurnHero = turnQueue.getCurrentTurn()`.  
-  - So when no one is acting, ATB advances and the first ready hero becomes “current”.
-
-### Actions
-
-- **`actAttack(targetHero, options?)`**  
-  - Requires `currentTurnHero` alive and `targetHero` alive.  
-  - Computes damage with `DamageCalculator.fromHeroToHero(currentTurnHero, targetHero, options)`.  
-  - Applies damage to `targetHero`, calls `currentTurnHero.consumeTurn()`, sets `currentTurnHero = null`.  
-  - Calls `turnQueue.tickUntilReady()`, then sets `currentTurnHero = getCurrentTurn()`.  
-  - Runs victory check.  
-  - Returns `{ damage, targetAlive, attacker, target }`.
-
-- **`actGuard()`**  
-  - If there is a `currentTurnHero`, calls `startGuarding()` on them (+10% DEF on incoming damage until their next action), consumes their turn, then same “tick until ready” and sets new `currentTurnHero`.
-
-- **`actPass()`**  
-  - If there is a `currentTurnHero`, clears their guarding, consumes their turn, then same “tick until ready” and sets new `currentTurnHero`.  
-  - Used for skip / future Item.
-
-### Victory
-
-- **`isBattleOver()`**  
-  - True when `victorId !== null`.
-
-- **`getVictor()`**  
-  - Returns winner hero id, or `null` (draw or not over).
-
-- **`_checkVictory()`**  
-  - Counts alive heroes; if ≤ 1, sets `victorId` to that hero’s id (or null for draw).
+- Each side has **TEAM_SIZE** (3) heroes.
+- Only **one hero per side** is “active” at a time; only actives are in the turn queue and can be targeted.
+- When the **active** hero dies, that side enters a **switch phase**: they must choose the next active (player via UI, AI at random).
+- **Voluntary switch**: On the player’s turn they can choose “Switch” (uses the turn); they then pick the next active from the same team.
 
 ---
 
-## 6. Player 2 AI (`src/battle/Player2AI.js`)
+## 6. Victory and battle end
 
-Decides the AI’s action each time it’s Player 2’s turn.
+- Battle ends when **one team has no alive heroes**.
+- **Victor**: `'player'` or `'enemy'`; if both wiped, treat as draw (`null`).
 
-### API
+---
+
+## 7. AI (`src/battle/Player2AI.js`)
 
 - **`getAIAction(aiHero, enemies)`**  
-  - `aiHero`: the AI-controlled hero (player2).  
-  - `enemies`: array of enemy heroes (e.g. [hero1]).  
-  - Returns `null` if AI is dead or no enemies.  
-  - If no alive enemies, returns `{ type: 'pass' }`.  
-  - Otherwise returns `{ type: 'attack', targetId: target.id }` for the first alive enemy.  
-  - Can be extended (e.g. choose lowest HP, use abilities).
-
-The scene uses this result to call `engine.actAttack(target)` or `engine.actPass()` after a short delay (e.g. 600 ms).
+  - Returns `{ type: 'attack', targetId }`, `{ type: 'guard' }`, or `{ type: 'pass' }`.
+  - If AI HP ratio ≤ **GUARD_HP_THRESHOLD** (0.4), prefers Guard.
+  - Otherwise attacks first alive enemy.
+  - When the enemy active dies, the **scene** calls `engine.selectNextEnemyHeroRandom()` to pick the next active at random.
 
 ---
 
-## 7. Scene Flow (`src/main.js`, scenes)
+## 8. Player input
 
-### Game entry
-
-- **Phaser config**: 800×600, Scale.FIT, autoCenter. Scenes: Boot → Preload → Battle.  
-- **Resize**: `window resize` and `orientationchange` call `game.scale.refresh()` so the canvas stays responsive.
-
-### Scene order
-
-1. **Boot**  
-   - Minimal setup; starts Preload.
-
-2. **Preload**  
-   - Loads placeholder textures (e.g. `hero-placeholder`, `hero-placeholder-p2`).  
-   - Starts Battle.
-
-3. **Battle**  
-   - Creates two `Hero` instances (player1 left, player2 right).  
-   - Creates `BattleEngine([hero1, hero2])`.  
-   - Builds layout: hero cards, ATB bars, HP/name labels, feedback window (4/12), command window (8/12) with Attack button, victory text.  
-   - **Update loop**:  
-     - If battle over: show victory and return.  
-     - `engine.tick()` to advance ATB.  
-     - Sync ATB bars and labels from hero state.  
-     - Show/hide Attack button when it’s player1’s turn.  
-     - Update feedback text (turn state, “Click Attack…”, ATB %).  
-     - If it’s player2’s turn and AI not yet scheduled: schedule a delayed call to `_executeAI()` (e.g. 600 ms), then run AI action via `getAIAction()` and `engine.actAttack()` or `engine.actPass()`.  
-   - **Player input**: Attack button calls `engine.actAttack(hero2)` when it’s player1’s turn.  
-   - **Damage pop**: When damage > 0, `_showDamagePop(x, y, amount)` shows a floating, easing damage number (Ragnarok-style).
-
-### Layout (BattleScene)
-
-- **Heroes**: Player 1 left, Player 2 (AI) right; constants define positions and card size.  
-- **Bottom bar**: Feedback panel 4/12 width (turn status, ATB %), Command panel 8/12 width (Attack button).  
-- **Damage**: Always shown on the unit that received the hit (player1 or player2 card).
+- **Commands** (when it’s the player’s turn and not in switch phase):
+  - **A** → Attack  
+  - **D** → Guard  
+  - **Q** → Switch (voluntary)
+- Buttons (Attack / Guard / Switch) mirror these; they are **disabled** (dimmed, not clickable) when ATB is filling or it’s the enemy’s turn.
+- During **switch phase** (after KO or voluntary Switch), the player picks the next hero via the Switch Hero window (1/2/3, arrows+Enter, or click).
 
 ---
 
-## 8. End-to-End Flow Summary
+## 9. Scene flow (summary)
 
-1. **Battle start**: Two heroes, engine created, ATB at 0.  
-2. **Each frame**: `engine.tick()` adds charge; when someone reaches 100%, they become `currentTurnHero`.  
-3. **Player 1 turn**: Attack button visible; player clicks Attack → `engine.actAttack(hero2)` → damage applied, turn consumed, next turn resolved.  
-4. **Player 2 turn**: After delay, AI `getAIAction()` returns attack player1 → `engine.actAttack(hero1)` → same flow.  
-5. **Damage**: Uses `FinalDamage = max(1, ATK - DEF)`; pop shown on the hit hero.  
-6. **Victory**: When ≤ 1 hero alive, `victorId` set; scene shows “Player 1 wins!” / “Player 2 wins!” / “Draw!”.
+- **Boot** → **Preload** → **Battle**.
+- Battle: two teams of 3 heroes, engine with `playerTeam` / `enemyTeam`, active indices, turn queue from actives only.
+- Each frame: if not over and not in switch phase, `engine.tick()`; sync UI; if player turn, accept A/D/Q and button clicks; if enemy turn, run AI after a short delay.
+- When active dies: set `pendingPlayerSwitch` or `pendingEnemySwitch`; scene shows switch UI or calls `selectNextEnemyHeroRandom()`; after switch, battle continues.
+- Victory: when one team has no alive heroes, show victory overlay (“You win!” / “Enemy wins!” / “Draw!”).
 
-This is the complete game logic as implemented in the codebase.
+This is the game logic as implemented in the codebase.

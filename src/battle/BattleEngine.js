@@ -5,6 +5,7 @@
  */
 import { TurnQueue } from './TurnQueue.js';
 import { DamageCalculator } from './DamageCalculator.js';
+import { MAX_CHARGE, ATB_DAMAGE_DRAWBACK, ATTACKER_ATB_DRAWBACK, GUARD_DEF_MULTIPLIER } from '../config/constants.js';
 
 export class BattleEngine {
   /**
@@ -73,7 +74,7 @@ export class BattleEngine {
     }
 
     const effectiveDef = targetHero.guarding
-      ? (targetHero.def + (targetHero.def * 0.1))
+      ? targetHero.def * GUARD_DEF_MULTIPLIER
       : targetHero.def;
     this.currentTurnHero.clearGuarding();
     const damage = DamageCalculator.calculate(
@@ -82,8 +83,13 @@ export class BattleEngine {
       options
     );
     targetHero.takeDamage(damage);
+    // Drawback: taking damage reduces ATB by 25%
+    const drawback = MAX_CHARGE * ATB_DAMAGE_DRAWBACK;
+    targetHero.charge = Math.max(0, targetHero.charge - drawback);
     this.currentTurnHero.consumeTurn();
     const previousTurn = this.currentTurnHero;
+    // Attacker drawback: their ATB is set to a negative value so they must fill more before acting again
+    previousTurn.charge = -MAX_CHARGE * ATTACKER_ATB_DRAWBACK;
     this.currentTurnHero = null;
 
     const targetWasPlayerActive =

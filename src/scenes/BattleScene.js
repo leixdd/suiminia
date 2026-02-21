@@ -204,7 +204,8 @@ export class BattleScene extends Phaser.Scene {
     const current = this.engine.currentTurnHero;
     const isPlayerTurn = current && this.playerTeam.includes(current);
     const canAct = isPlayerTurn && !this.engine.isBattleOver() && !this.engine.pendingPlayerSwitch;
-    this.commandBar.setButtonsVisible(canAct);
+    this.commandBar.setButtonsVisible(!this.engine.isBattleOver());
+    this.commandBar.setButtonsEnabled(canAct);
 
     if (this.engine.isBattleOver()) {
       this.commandBar.setInstructions('Battle over.', '');

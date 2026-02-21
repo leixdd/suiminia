@@ -179,15 +179,14 @@ export class HeroUI {
       this._displayCharge += (charge - this._displayCharge) * ATB_FILL_LERP;
       this._displayCharge = Math.min(this._displayCharge, charge);
     }
-    const displayProgress = this._displayCharge / MAX_CHARGE;
+    const displayProgress = Math.max(0, Math.min(1, this._displayCharge / MAX_CHARGE));
     this.atbFill.width = this._atbBarWidth * displayProgress;
     this.atbFill.height = this._atbBarHeight;
     this.atbFill.setOrigin(0, 0.5);
     this.atbFill.visible = hero.alive;
     this.atbBg.visible = hero.alive;
     this.atbLabel.setVisible(hero.alive);
-    const chargeRaw = Math.min(MAX_CHARGE, Math.round(charge));
-    const pct = Math.round((charge / MAX_CHARGE) * 100);
+    const pct = Math.max(0, Math.min(100, Math.round((charge / MAX_CHARGE) * 100)));
     this.atbValueText
       .setText(`${pct}%`)
       .setVisible(hero.alive);

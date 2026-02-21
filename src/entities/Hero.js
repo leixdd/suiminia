@@ -32,7 +32,7 @@ export class Hero {
     this.guarding = false;
   }
 
-  /** Start guarding: +10% DEF on incoming damage until next action */
+  /** Start guarding: DEF multiplied by GUARD_DEF_MULTIPLIER on incoming damage until next action */
   startGuarding() {
     this.guarding = true;
   }
@@ -67,8 +67,8 @@ export class Hero {
     return actual;
   }
 
-  /** Charge progress as 0..1 for UI bar */
+  /** Charge progress as 0..1 for UI bar (clamped; charge can be negative after attacker drawback) */
   chargeProgress() {
-    return Math.min(1, this.charge / MAX_CHARGE);
+    return Math.max(0, Math.min(1, this.charge / MAX_CHARGE));
   }
 }

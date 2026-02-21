@@ -6,6 +6,7 @@ import {
   GAME_HEIGHT,
   GAME_FONT,
   FONT_SIZE_DEBUG_UI,
+  GUARD_DEF_MULTIPLIER,
 } from '../config/constants.js';
 
 const DEPTH = 450;
@@ -89,11 +90,12 @@ export class DebugDamageLog {
   addEntry(result) {
     if (result.attacker == null || result.atk == null || result.effectiveDef == null) return;
     const baseDef = result.baseDef ?? result.effectiveDef;
-    const guardStr = result.guarded ? ' (guard +10% DEF)' : '';
+    const guardPct = Math.round((GUARD_DEF_MULTIPLIER - 1) * 100);
+    const guardStr = result.guarded ? ` (guard +${guardPct}% DEF)` : '';
     const summaryLine = `${result.attacker.name} ${result.atk} ATK vs ${result.target.name} ${fmtNum(result.effectiveDef)} DEF${guardStr} → ${fmtNum(result.damage)} dmg`;
     let formulaLine;
     if (result.guarded) {
-      formulaLine = `  effective_def = ${baseDef} + (${baseDef} × 0.1) = ${fmtNum(result.effectiveDef)}; dmg = ${fmtNum(result.damage)}`;
+      formulaLine = `  effective_def = ${baseDef} × ${GUARD_DEF_MULTIPLIER} = ${fmtNum(result.effectiveDef)}; dmg = ${fmtNum(result.damage)}`;
     } else {
       formulaLine = `  max(1, atk - def) = max(1, ${result.atk} - ${fmtNum(result.effectiveDef)}) = ${fmtNum(result.damage)}`;
     }
