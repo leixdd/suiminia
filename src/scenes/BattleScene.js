@@ -92,21 +92,56 @@ export class BattleScene extends Phaser.Scene {
       this.enemyTeamRows.push(er);
     }
 
-    // "Choose next hero!" overlay for player (hidden until pendingPlayerSwitch)
+    // --- "Choose next hero" window (keyboard + mouse) ---
+    const switchDepth = 400;
+    const switchPanelW = 320;
+    const switchPanelH = 200;
+    const switchPanelX = GAME_WIDTH / 2;
+    const switchPanelY = GAME_HEIGHT / 2;
+    const rowH = 36;
+    const rowStartY = switchPanelY - switchPanelH / 2 + 44;
+
     this.switchOverlay = this.add
-      .rectangle(GAME_WIDTH / 2, centerY, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.5)
+      .rectangle(GAME_WIDTH / 2, centerY, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6)
       .setInteractive()
       .setVisible(false)
-      .setDepth(400);
-    this.switchText = this.add
-      .text(GAME_WIDTH / 2, centerY - 40, 'Choose next hero!', {
-        fontSize: 16,
+      .setDepth(switchDepth);
+
+    this.switchPanel = this.add
+      .rectangle(switchPanelX, switchPanelY, switchPanelW, switchPanelH, 0x1e2a38, 0.98)
+      .setStrokeStyle(3, 0x3498db)
+      .setVisible(false)
+      .setDepth(switchDepth + 1);
+
+    this.switchTitle = this.add
+      .text(switchPanelX, switchPanelY - switchPanelH / 2 + 22, 'Choose next hero!', {
+        fontSize: 12,
         fontFamily: GAME_FONT,
         color: '#f1c40f',
       })
       .setOrigin(0.5)
       .setVisible(false)
-      .setDepth(401);
+      .setDepth(switchDepth + 2);
+
+    this.switchOptionRows = [];
+    for (let i = 0; i < TEAM_SIZE; i++) {
+      const y = rowStartY + i * rowH + rowH / 2;
+      const row = this._addSwitchWindowRow(switchPanelX, y, i);
+      this.switchOptionRows.push(row);
+    }
+
+    this.switchHint = this.add
+      .text(switchPanelX, switchPanelY + switchPanelH / 2 - 22, '1 / 2 / 3 or click  ·  \u2191\u2193 + Enter', {
+        fontSize: 8,
+        fontFamily: GAME_FONT,
+        color: '#8b949e',
+      })
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(switchDepth + 2);
+
+    /** Keyboard-selected index in switch window (0..2); only alive heroes are valid */
+    this.switchSelectedIndex = 0;
 
     // Victory text
     this.victoryText = this.add
@@ -246,6 +281,40 @@ export class BattleScene extends Phaser.Scene {
     this._aiScheduled = false;
     this._victoryScheduled = false;
     this._enemySwitchScheduled = false;
+
+    // Keyboard for switch window: 1/2/3 and arrows + Enter
+    this.input.keyboard.on('keydown', this._onSwitchWindowKeyDown, this);
+  }
+
+  _addSwitchWindowRow(centerX, y, index) {
+    const rowW = 260;
+    const rowH = 28;
+    const bg = this.add
+      .rectangle(centerX, y, rowW, rowH, 0x0d1117, 0.95)
+      .setStrokeStyle(1, 0x3a3a5c)
+      .setVisible(false)
+      .setDepth(402);
+    const keyText = this.add
+      .text(centerX - rowW / 2 + 14, y, `[${index + 1}]`, { fontSize: 10, fontFamily: GAME_FONT, color: '#8b949e' })
+      .setOrigin(0, 0.5)
+      .setVisible(false)
+      .setDepth(403);
+    const nameText = this.add
+      .text(centerX - rowW / 2 + 50, y, '', { fontSize: 10, fontFamily: GAME_FONT, color: '#e0e0e0' })
+      .setOrigin(0, 0.5)
+      .setVisible(false)
+      .setDepth(403);
+    const hpText = this.add
+      .text(centerX + rowW / 2 - 14, y, '', { fontSize: 10, fontFamily: GAME_FONT, color: '#aaa' })
+      .setOrigin(1, 0.5)
+      .setVisible(false)
+      .setDepth(403);
+    const zone = this.add
+      .rectangle(centerX, y, rowW, rowH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false)
+      .setDepth(404);
+    return { bg, keyText, nameText, hpText, zone, index };
   }
 
   _addTeamRow(x, y, hero, index, isPlayer) {
@@ -290,15 +359,14 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    // Player switch: show overlay and wait for click on team row (handled in _onTeamRowClicked)
+    // Player switch: show window (keyboard + mouse)
     if (this.engine.pendingPlayerSwitch) {
-      this.switchOverlay.setVisible(true);
-      this.switchText.setVisible(true);
+      this._showSwitchWindow();
+      this._syncSwitchWindowContent();
       this._syncTeamPanels();
       return;
     }
-    this.switchOverlay.setVisible(false);
-    this.switchText.setVisible(false);
+    this._hideSwitchWindow();
 
     this.engine.tick();
     this.playerActiveUI.setHero(this.engine.getPlayerActive());
@@ -371,6 +439,99 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  _showSwitchWindow() {
+    this.switchOverlay.setVisible(true);
+    this.switchPanel.setVisible(true);
+    this.switchTitle.setVisible(true);
+    this.switchHint.setVisible(true);
+    const aliveIndices = this.playerTeam.map((h, i) => ({ hero: h, i })).filter(({ hero }) => hero.alive).map(({ i }) => i);
+    this.switchSelectedIndex = aliveIndices.length > 0 ? aliveIndices[0] : 0;
+    for (const row of this.switchOptionRows) {
+      row.bg.setVisible(true);
+      row.keyText.setVisible(true);
+      row.nameText.setVisible(true);
+      row.hpText.setVisible(true);
+      row.zone.setVisible(true);
+      row.zone.removeAllListeners();
+      row.zone.on('pointerdown', () => this._onSwitchWindowRowClicked(row.index));
+      row.zone.on('pointerover', () => { this.switchSelectedIndex = row.index; });
+    }
+  }
+
+  _hideSwitchWindow() {
+    this.switchOverlay.setVisible(false);
+    this.switchPanel.setVisible(false);
+    this.switchTitle.setVisible(false);
+    this.switchHint.setVisible(false);
+    for (const row of this.switchOptionRows) {
+      row.bg.setVisible(false);
+      row.keyText.setVisible(false);
+      row.nameText.setVisible(false);
+      row.hpText.setVisible(false);
+      row.zone.setVisible(false);
+    }
+  }
+
+  _syncSwitchWindowContent() {
+    for (const row of this.switchOptionRows) {
+      const hero = this.playerTeam[row.index];
+      row.nameText.setText(hero.name);
+      row.hpText.setText(`${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`);
+      row.nameText.setColor(hero.alive ? '#e0e0e0' : '#666');
+      row.hpText.setColor(hero.alive ? '#aaa' : '#666');
+      row.keyText.setColor(hero.alive ? '#8b949e' : '#555');
+      const selected = this.switchSelectedIndex === row.index;
+      row.bg.setStrokeStyle(selected ? 2 : 1, hero.alive && selected ? 0x3498db : 0x3a3a5c);
+    }
+  }
+
+  _onSwitchWindowKeyDown(event) {
+    if (!this.engine.pendingPlayerSwitch) return;
+    const aliveIndices = this.playerTeam.map((h, i) => i).filter((i) => this.playerTeam[i].alive);
+    if (aliveIndices.length === 0) return;
+
+    const key = event.keyCode;
+    // 1, 2, 3 (key codes 49, 50, 51)
+    if (key >= 49 && key <= 51) {
+      const index = key - 49;
+      if (this.playerTeam[index].alive) {
+        this._confirmSwitchSelection(index);
+        return;
+      }
+    }
+    // Enter
+    if (key === 13) {
+      if (this.playerTeam[this.switchSelectedIndex].alive) {
+        this._confirmSwitchSelection(this.switchSelectedIndex);
+      }
+      return;
+    }
+    // Arrow Up / Down
+    if (key === 38) {
+      const idx = aliveIndices.indexOf(this.switchSelectedIndex);
+      const prev = idx <= 0 ? aliveIndices.length - 1 : idx - 1;
+      this.switchSelectedIndex = aliveIndices[prev];
+      return;
+    }
+    if (key === 40) {
+      const idx = aliveIndices.indexOf(this.switchSelectedIndex);
+      const next = idx < 0 || idx >= aliveIndices.length - 1 ? 0 : idx + 1;
+      this.switchSelectedIndex = aliveIndices[next];
+      return;
+    }
+  }
+
+  _onSwitchWindowRowClicked(index) {
+    if (!this.engine.pendingPlayerSwitch || !this.playerTeam[index].alive) return;
+    this._confirmSwitchSelection(index);
+  }
+
+  _confirmSwitchSelection(index) {
+    if (!this.engine.selectNextPlayerHero(index)) return;
+    this.playerActiveUI.setHero(this.engine.getPlayerActive());
+    this._hideSwitchWindow();
+  }
+
   _addDamageLogEntry(result) {
     if (result.attacker == null || result.atk == null || result.effectiveDef == null) return;
     const baseDef = result.baseDef ?? result.effectiveDef;
@@ -432,7 +593,7 @@ export class BattleScene extends Phaser.Scene {
     }
     if (this.engine.pendingPlayerSwitch) {
       this.instructionText.setText('Choose your next hero!');
-      this.instructionSubtext.setText('Click an alive hero in the team panel.');
+      this.instructionSubtext.setText('Press 1/2/3 or \u2191\u2193 + Enter, or click a hero.');
       return;
     }
     const current = this.engine.currentTurnHero;
