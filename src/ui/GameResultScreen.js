@@ -7,8 +7,8 @@ import { GAME_WIDTH, GAME_HEIGHT, GAME_FONT } from '../config/constants.js';
 
 const DEPTH = 560;
 const PANEL_H = 320;
+const PANEL_PAD = 40;
 const TITLE_Y_OFFSET = 22;
-const ROW_W = 220;
 const ROW_H = 36;
 const ROW_SPACING = 42;
 const STATS_LINE_HEIGHT = 22;
@@ -16,6 +16,21 @@ const FONT_SIZE_TITLE = 22;
 const FONT_SIZE_HEADER = 12;
 const FONT_SIZE_ROW = 10;
 const FONT_SIZE_STATS = 10;
+
+/** Row width so both columns fit with padding (each half minus padding). */
+function getRowWidth() {
+  return Math.max(180, (GAME_WIDTH / 2) - 2 * PANEL_PAD);
+}
+
+/** Left column center X (first quarter of panel). */
+function getLeftColCenter() {
+  return GAME_WIDTH / 4;
+}
+
+/** Right column center X (third quarter of panel). */
+function getRightColCenter() {
+  return (3 * GAME_WIDTH) / 4;
+}
 
 // Same as SwitchHeroWindow
 const OVERLAY_COLOR = 0x000000;
@@ -74,8 +89,9 @@ export class GameResultScreen {
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
     const panelTop = cy - PANEL_H / 2;
-    const listLeftX = cx - 140;
-    const listRightX = cx + 140;
+    const listLeftX = getLeftColCenter();
+    const listRightX = getRightColCenter();
+    const rowW = getRowWidth();
     const rowStartY = panelTop + 50;
 
     const msg =
@@ -103,11 +119,11 @@ export class GameResultScreen {
     playerTeam.forEach((hero, i) => {
       const y = rowStartY + i * ROW_SPACING + ROW_H / 2;
       const bg = this.scene.add
-        .rectangle(listLeftX, y, ROW_W, ROW_H, ROW_FILL, ROW_ALPHA)
+        .rectangle(listLeftX, y, rowW, ROW_H, ROW_FILL, ROW_ALPHA)
         .setStrokeStyle(1, ROW_STROKE)
         .setDepth(DEPTH + 2);
       const nameText = this.scene.add
-        .text(listLeftX - ROW_W / 2 + 14, y - ROW_H / 2 + 6, hero.name, {
+        .text(listLeftX - rowW / 2 + 14, y - ROW_H / 2 + 6, hero.name, {
           fontSize: FONT_SIZE_ROW,
           fontFamily: GAME_FONT,
           color: NAME_COLOR,
@@ -116,7 +132,7 @@ export class GameResultScreen {
         .setDepth(DEPTH + 3);
       const statsText = this.scene.add
         .text(
-          listLeftX - ROW_W / 2 + 14,
+          listLeftX - rowW / 2 + 14,
           y - ROW_H / 2 + 6 + STATS_LINE_HEIGHT,
           `Attacks: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
           { fontSize: FONT_SIZE_STATS, fontFamily: GAME_FONT, color: STATS_COLOR }
@@ -140,11 +156,11 @@ export class GameResultScreen {
     enemyTeam.forEach((hero, i) => {
       const y = rowStartY + i * ROW_SPACING + ROW_H / 2;
       const bg = this.scene.add
-        .rectangle(listRightX, y, ROW_W, ROW_H, ROW_FILL, ROW_ALPHA)
+        .rectangle(listRightX, y, rowW, ROW_H, ROW_FILL, ROW_ALPHA)
         .setStrokeStyle(1, ROW_STROKE)
         .setDepth(DEPTH + 2);
       const nameText = this.scene.add
-        .text(listRightX - ROW_W / 2 + 14, y - ROW_H / 2 + 6, hero.name, {
+        .text(listRightX - rowW / 2 + 14, y - ROW_H / 2 + 6, hero.name, {
           fontSize: FONT_SIZE_ROW,
           fontFamily: GAME_FONT,
           color: NAME_COLOR,
@@ -153,7 +169,7 @@ export class GameResultScreen {
         .setDepth(DEPTH + 3);
       const statsText = this.scene.add
         .text(
-          listRightX - ROW_W / 2 + 14,
+          listRightX - rowW / 2 + 14,
           y - ROW_H / 2 + 6 + STATS_LINE_HEIGHT,
           `Attacks: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
           { fontSize: FONT_SIZE_STATS, fontFamily: GAME_FONT, color: STATS_COLOR }
