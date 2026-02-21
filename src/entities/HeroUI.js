@@ -129,7 +129,7 @@ export class HeroUI {
       .rectangle(barLeftX, atbBarY, barWidth * hero.chargeProgress(), barHeight, 0x3498db, 1)
       .setOrigin(0, 0.5);
     this.atbValueText = scene.add
-      .text(barRightX, atbBarY + atbValueOffsetY, `0% (0/${MAX_CHARGE})`, {
+      .text(barLeftX + padding, atbBarY - 4, `0%`, {
         fontSize: HERO_UI_FONT_SIZE_BAR,
         fontFamily: HERO_UI_FONT,
         color: '#e0e0e0',
@@ -187,7 +187,7 @@ export class HeroUI {
     const chargeRaw = Math.min(MAX_CHARGE, Math.round(charge));
     const pct = Math.round((charge / MAX_CHARGE) * 100);
     this.atbValueText
-      .setText(`${pct}% (${chargeRaw}/${MAX_CHARGE})`)
+      .setText(`${pct}%`)
       .setVisible(hero.alive);
   }
 
