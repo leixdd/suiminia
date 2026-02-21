@@ -4,6 +4,7 @@
  */
 import Phaser from 'phaser';
 import { Hero } from '../entities/Hero.js';
+import { HeroUI } from '../entities/HeroUI.js';
 import { BattleEngine } from '../battle/BattleEngine.js';
 import { getAIAction } from '../battle/Player2AI.js';
 import {
@@ -12,8 +13,6 @@ import {
   BATTLE_PADDING,
   CARD_WIDTH,
   CARD_HEIGHT,
-  MAX_CHARGE,
-  HERO_BAR_WIDTH,
 } from '../config/constants.js';
 
 /** Delay (ms) before AI executes its turn so the player sees it's the AI's turn */
@@ -25,9 +24,6 @@ const VICTORY_DELAY_MS = 1500;
 function fmtNum(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
-
-/** Lerp factor for ATB bar fill animation (lower = slower, more visible fill from 0) */
-const ATB_FILL_LERP = 0.08;
 
 export class BattleScene extends Phaser.Scene {
   constructor() {
@@ -66,18 +62,9 @@ export class BattleScene extends Phaser.Scene {
     this.card1 = this._makeHeroCard(leftX, centerY, 'player1', 'hero-placeholder');
     this.card2 = this._makeHeroCard(rightX, centerY, 'player2', 'hero-placeholder-p2');
 
-    // Name labels above cards
-    this.label1 = this._makeLabel(leftX, centerY - CARD_HEIGHT / 2 - 25, hero1);
-    this.label2 = this._makeLabel(rightX, centerY - CARD_HEIGHT / 2 - 25, hero2);
-
-    // HP and ATB bars below card (same width, right-aligned, stacked)
-    const hpBarY = centerY + CARD_HEIGHT / 2 + 10;
-    const hpRowHeight = 26; // bar 12 + value text above ~14
-    const atbBarY = hpBarY + hpRowHeight;
-    this.hpBar1 = this._makeHpBar(leftX, hpBarY, hero1);
-    this.hpBar2 = this._makeHpBar(rightX, hpBarY, hero2);
-    this.bar1 = this._makeChargeBar(leftX, atbBarY, hero1);
-    this.bar2 = this._makeChargeBar(rightX, atbBarY, hero2);
+    // Hero UI: name + HP bar + ATB bar in one entity per hero
+    this.heroUI1 = new HeroUI(this, leftX, centerY, hero1);
+    this.heroUI2 = new HeroUI(this, rightX, centerY, hero2);
 
     // Victory text (hidden until battle end)
     this.victoryText = this.add
@@ -265,91 +252,9 @@ export class BattleScene extends Phaser.Scene {
     return card;
   }
 
-  _makeHpBar(x, y, hero) {
-    const barWidth = HERO_BAR_WIDTH;
-    const barHeight = 12;
-    const padding = 6;
-    const barRightX = x;
-    const hpLabel = this.add
-      .text(barRightX - barWidth - padding, y, 'HP', { fontSize: 11, color: '#b0b0b0' })
-      .setOrigin(1, 0.5);
-    const bg = this.add
-      .rectangle(barRightX, y, barWidth, barHeight, 0x333333, 0.9)
-      .setOrigin(1, 0.5);
-    const fill = this.add
-      .rectangle(barRightX, y, barWidth * (hero.currentHp / hero.maxHp), barHeight, 0x2ecc71, 1)
-      .setOrigin(1, 0.5);
-    const valueText = this.add
-      .text(barRightX, y - barHeight / 2 - 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, { fontSize: 11, color: '#e0e0e0' })
-      .setOrigin(1, 1);
-    return { bg, fill, hero, barWidth, barHeight, hpLabel, valueText };
-  }
-
-  _makeChargeBar(x, y, hero) {
-    const barWidth = HERO_BAR_WIDTH;
-    const barHeight = 12;
-    const padding = 6;
-    const valueOffsetY = barHeight / 2 + 10;
-    const barRightX = x;
-    const atbLabel = this.add
-      .text(barRightX - barWidth - padding, y, 'ATB', { fontSize: 11, color: '#b0b0b0' })
-      .setOrigin(1, 0.5);
-    const bg = this.add
-      .rectangle(barRightX, y, barWidth, barHeight, 0x333333, 0.9)
-      .setOrigin(1, 0.5);
-    const fill = this.add
-      .rectangle(barRightX, y, barWidth * hero.chargeProgress(), barHeight, 0x3498db, 1)
-      .setOrigin(1, 0.5);
-    const valueText = this.add
-      .text(barRightX, y + valueOffsetY, `0% (0/${MAX_CHARGE})`, { fontSize: 11, color: '#e0e0e0' })
-      .setOrigin(1, 0);
-    return { bg, fill, hero, barWidth, barHeight, atbLabel, valueText, displayCharge: 0, previousCharge: -1 };
-  }
-
-  _makeLabel(x, y, hero) {
-    const text = this.add
-      .text(x, y, hero.name, {
-        fontSize: 14,
-        color: '#eee',
-        align: 'center',
-      })
-      .setOrigin(0.5);
-    return { text, hero };
-  }
-
   _syncBars() {
-    [this.hpBar1, this.hpBar2].forEach((bar) => {
-      const p = bar.hero.currentHp / bar.hero.maxHp;
-      bar.fill.width = bar.barWidth * p;
-      bar.fill.visible = bar.hero.alive;
-      bar.bg.visible = bar.hero.alive;
-      if (bar.hpLabel) bar.hpLabel.setVisible(bar.hero.alive);
-      if (bar.valueText) bar.valueText.setText(`${fmtNum(bar.hero.currentHp)}/${fmtNum(bar.hero.maxHp)}`).setVisible(bar.hero.alive);
-    });
-    this.label1.text.setText(this.hero1.name);
-    this.label2.text.setText(this.hero2.name);
-    [this.bar1, this.bar2].forEach((bar) => {
-      const charge = bar.hero.charge;
-      if ((bar.previousCharge === 0 || bar.previousCharge === -1) && charge > 0) {
-        bar.displayCharge = 0;
-      }
-      bar.previousCharge = charge;
-      if (charge <= 0) {
-        bar.displayCharge += (0 - bar.displayCharge) * ATB_FILL_LERP;
-        if (bar.displayCharge < 0.5) bar.displayCharge = 0;
-      } else {
-        bar.displayCharge += (charge - bar.displayCharge) * ATB_FILL_LERP;
-        bar.displayCharge = Math.min(bar.displayCharge, charge);
-      }
-      const displayProgress = bar.displayCharge / MAX_CHARGE;
-      bar.fill.width = bar.barWidth * displayProgress;
-      bar.fill.visible = bar.hero.alive;
-      bar.bg.visible = bar.hero.alive;
-      if (bar.atbLabel) bar.atbLabel.setVisible(bar.hero.alive);
-      const chargeRaw = Math.min(MAX_CHARGE, Math.round(charge));
-      const pct = Math.round((charge / MAX_CHARGE) * 100);
-      if (bar.valueText) bar.valueText.setText(`${pct}% (${chargeRaw}/${MAX_CHARGE})`).setVisible(bar.hero.alive);
-    });
+    this.heroUI1.sync();
+    this.heroUI2.sync();
     this.card1.setAlpha(this.hero1.alive ? 1 : 0.4);
     this.card2.setAlpha(this.hero2.alive ? 1 : 0.4);
   }
