@@ -139,6 +139,20 @@ export class BattleEngine {
   }
 
   /**
+   * Player voluntarily switches hero (uses their turn). Opens switch UI; valid only on player's turn.
+   * @returns {boolean}
+   */
+  requestVoluntarySwitch() {
+    if (this.victorId !== null) return false;
+    if (this.currentTurnHero === null || !this.playerTeam.includes(this.currentTurnHero)) return false;
+    this.currentTurnHero.clearGuarding();
+    this.currentTurnHero.consumeTurn();
+    this.currentTurnHero = null;
+    this.pendingPlayerSwitch = true;
+    return true;
+  }
+
+  /**
    * Player selects which hero to send next. Valid only when pendingPlayerSwitch.
    * @param {number} index - 0..2, must be alive and not already active
    */

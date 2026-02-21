@@ -245,11 +245,22 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(uiDepth + 1);
 
-    const btnW = 100;
+    const btnW = 88;
     const btnH = 40;
-    const btnGap = 16;
-    const attackX = commandCenterX + btnGap / 2 + btnW / 2;
-    const guardX = commandCenterX - btnGap / 2 - btnW / 2;
+    const btnGap = 12;
+    const switchX = commandCenterX - btnGap - btnW;
+    const guardX = commandCenterX;
+    const attackX = commandCenterX + btnGap + btnW;
+    this.switchBtn = this.add
+      .rectangle(switchX, bottomBarY, btnW, btnH, 0x9b59b6)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false)
+      .setDepth(uiDepth + 1);
+    this.switchBtnText = this.add
+      .text(switchX, bottomBarY, 'Switch', { fontSize: COMMAND_WINDOW_FONT_SIZE, fontFamily: COMMAND_WINDOW_FONT, color: '#fff' })
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(uiDepth + 1);
     this.guardBtn = this.add
       .rectangle(guardX, bottomBarY, btnW, btnH, 0x3498db)
       .setInteractive({ useHandCursor: true })
@@ -271,6 +282,9 @@ export class BattleScene extends Phaser.Scene {
       .setVisible(false)
       .setDepth(uiDepth + 1);
 
+    this.switchBtn.on('pointerdown', () => this._onSwitchClicked());
+    this.switchBtn.on('pointerover', () => this.switchBtn.setAlpha(0.9));
+    this.switchBtn.on('pointerout', () => this.switchBtn.setAlpha(1));
     this.guardBtn.on('pointerdown', () => this._onGuardClicked());
     this.guardBtn.on('pointerover', () => this.guardBtn.setAlpha(0.9));
     this.guardBtn.on('pointerout', () => this.guardBtn.setAlpha(1));
@@ -583,6 +597,8 @@ export class BattleScene extends Phaser.Scene {
     this.attackBtnText.setVisible(canAct);
     this.guardBtn.setVisible(canAct);
     this.guardBtnText.setVisible(canAct);
+    this.switchBtn.setVisible(canAct);
+    this.switchBtnText.setVisible(canAct);
   }
 
   _updateTurnInstructions() {
@@ -668,6 +684,13 @@ export class BattleScene extends Phaser.Scene {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
     this.engine.actGuard();
+  }
+
+  _onSwitchClicked() {
+    const current = this.engine.currentTurnHero;
+    if (!current || !this.playerTeam.includes(current)) return;
+    this.engine.requestVoluntarySwitch();
+    // Switch window will open in update(); after player picks, _confirmSwitchSelection updates UI
   }
 
   _onAttackClicked() {
