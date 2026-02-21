@@ -98,7 +98,7 @@ export class HeroUI {
       )
       .setOrigin(0, 0.5);
     this.hpValueText = scene.add
-      .text(barRightX, hpBarY - barHeight / 2 - 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, {
+      .text(barLeftX - padding + 10, hpBarY + barHeight / 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, {
         fontSize: 11,
         color: '#e0e0e0',
       })
