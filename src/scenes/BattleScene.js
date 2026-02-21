@@ -23,6 +23,7 @@ import {
   FONT_SIZE_DAMAGE_POP,
   GAME_FONT,
 } from '../config/constants.js';
+import { DEFAULT_PLAYER_PARTY } from '../config/teamData.js';
 
 const AI_TURN_DELAY_MS = 600;
 const VICTORY_DELAY_MS = 1500;
@@ -48,17 +49,23 @@ export class BattleScene extends Phaser.Scene {
     super({ key: 'Battle' });
   }
 
-  create() {
-    const playerTeam = createTeamHeroes('player', ['Alpha', 'Beta', 'Gamma'], [
-      { atk: 25, def: 5, spd: 10, maxHp: 100 },
-      { atk: 22, def: 8, spd: 7, maxHp: 100 },
-      { atk: 20, def: 10, spd: 5, maxHp: 100 },
-    ]);
-    const enemyTeam = createTeamHeroes('enemy', ['Shadow', 'Blade', 'Fang'], [
-      { atk: 20, def: 8, spd: 4, maxHp: 100 },
-      { atk: 24, def: 6, spd: 6, maxHp: 100 },
-      { atk: 18, def: 9, spd: 9, maxHp: 100 },
-    ]);
+  create(data = {}) {
+    const playerConfig = data.playerParty ?? DEFAULT_PLAYER_PARTY;
+    const enemyConfig = data.enemyTeam?.heroes ?? [
+      { name: 'Shadow', atk: 20, def: 8, spd: 4, maxHp: 100 },
+      { name: 'Blade', atk: 24, def: 6, spd: 6, maxHp: 100 },
+      { name: 'Fang', atk: 18, def: 9, spd: 9, maxHp: 100 },
+    ];
+    const playerTeam = createTeamHeroes(
+      'player',
+      playerConfig.map((h) => h.name),
+      playerConfig
+    );
+    const enemyTeam = createTeamHeroes(
+      'enemy',
+      enemyConfig.map((h) => h.name),
+      enemyConfig
+    );
 
     this.playerTeam = playerTeam;
     this.enemyTeam = enemyTeam;

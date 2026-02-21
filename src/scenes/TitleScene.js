@@ -33,7 +33,7 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5);
 
-    const start = () => this.scene.start('Battle');
+    const start = () => this.scene.start('Lobby');
 
     this.input.on('pointerdown', start);
 
