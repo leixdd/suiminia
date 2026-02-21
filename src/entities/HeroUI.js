@@ -61,14 +61,14 @@ export class HeroUI {
     this.hero = hero;
 
     const labelY = -CARD_HEIGHT / 2 - 25;
-    const hpBarY = CARD_HEIGHT / 2 + 10;
+    const hpBarY = CARD_HEIGHT / 2 + 20;
     const hpRowHeight = 26;
     const atbBarY = hpBarY + hpRowHeight;
 
     const barWidth = HERO_BAR_WIDTH;
     const barHeight = 12;
     const padding = 6;
-    const barLeftX = -barWidth;
+    const barLeftX = -(barWidth / 2);
     const barRightX = 0;
 
     this.container = scene.add.container(x, y);
@@ -133,6 +133,8 @@ export class HeroUI {
         fontSize: HERO_UI_FONT_SIZE_BAR,
         fontFamily: HERO_UI_FONT,
         color: '#e0e0e0',
+        stroke: '#000000',
+        strokeThickness: 1,
       })
       .setOrigin(0, 0);
 
