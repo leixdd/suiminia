@@ -35,6 +35,7 @@ export class HeroUI {
     const barWidth = HERO_BAR_WIDTH;
     const barHeight = 12;
     const padding = 6;
+    const barLeftX = -barWidth;
     const barRightX = 0;
 
     this.container = scene.add.container(x, y);
@@ -49,44 +50,44 @@ export class HeroUI {
       .setOrigin(0.5);
     this.container.add(this.nameText);
 
-    // --- HP bar ---
+    // --- HP bar (fill grows left → right) ---
     this.hpLabel = scene.add
-      .text(barRightX - barWidth - padding, hpBarY, 'HP', { fontSize: 11, color: '#b0b0b0' })
+      .text(barLeftX - padding, hpBarY, 'HP', { fontSize: 11, color: '#b0b0b0' })
       .setOrigin(1, 0.5);
     this.hpBg = scene.add
-      .rectangle(barRightX, hpBarY, barWidth, barHeight, 0x333333, 0.9)
-      .setOrigin(1, 0.5);
+      .rectangle(barLeftX, hpBarY, barWidth, barHeight, 0x333333, 0.9)
+      .setOrigin(0, 0.5);
     this.hpFill = scene.add
-      .rectangle(barRightX, hpBarY, barWidth * (hero.currentHp / hero.maxHp), barHeight, 0x2ecc71, 1)
-      .setOrigin(1, 0.5);
+      .rectangle(barLeftX, hpBarY, barWidth * (hero.currentHp / hero.maxHp), barHeight, 0x2ecc71, 1)
+      .setOrigin(0, 0.5);
     this.hpValueText = scene.add
       .text(barRightX, hpBarY - barHeight / 2 - 2, `${fmtNum(hero.currentHp)}/${fmtNum(hero.maxHp)}`, {
         fontSize: 11,
         color: '#e0e0e0',
       })
-      .setOrigin(1, 1);
+      .setOrigin(0, 1);
 
     this.container.add([this.hpLabel, this.hpBg, this.hpFill, this.hpValueText]);
     this._hpBarWidth = barWidth;
     this._hpBarHeight = barHeight;
 
-    // --- ATB / Charge bar ---
+    // --- ATB / Charge bar (fill grows left → right) ---
     const atbValueOffsetY = barHeight / 2 + 10;
     this.atbLabel = scene.add
-      .text(barRightX - barWidth - padding, atbBarY, 'ATB', { fontSize: 11, color: '#b0b0b0' })
+      .text(barLeftX - padding, atbBarY, 'ATB', { fontSize: 11, color: '#b0b0b0' })
       .setOrigin(1, 0.5);
     this.atbBg = scene.add
-      .rectangle(barRightX, atbBarY, barWidth, barHeight, 0x333333, 0.9)
-      .setOrigin(1, 0.5);
+      .rectangle(barLeftX, atbBarY, barWidth, barHeight, 0x333333, 0.9)
+      .setOrigin(0, 0.5);
     this.atbFill = scene.add
-      .rectangle(barRightX, atbBarY, barWidth * hero.chargeProgress(), barHeight, 0x3498db, 1)
-      .setOrigin(1, 0.5);
+      .rectangle(barLeftX, atbBarY, barWidth * hero.chargeProgress(), barHeight, 0x3498db, 1)
+      .setOrigin(0, 0.5);
     this.atbValueText = scene.add
       .text(barRightX, atbBarY + atbValueOffsetY, `0% (0/${MAX_CHARGE})`, {
         fontSize: 11,
         color: '#e0e0e0',
       })
-      .setOrigin(1, 0);
+      .setOrigin(0, 0);
 
     this.container.add([this.atbLabel, this.atbBg, this.atbFill, this.atbValueText]);
     this._atbBarWidth = barWidth;
@@ -106,7 +107,7 @@ export class HeroUI {
     const hpRatio = hero.currentHp / hero.maxHp;
     this.hpFill.width = this._hpBarWidth * hpRatio;
     this.hpFill.height = this._hpBarHeight;
-    this.hpFill.setOrigin(1, 0.5);
+    this.hpFill.setOrigin(0, 0.5);
     this.hpFill.visible = hero.alive;
     this.hpBg.visible = hero.alive;
     this.hpLabel.setVisible(hero.alive);
@@ -129,7 +130,7 @@ export class HeroUI {
     const displayProgress = this._displayCharge / MAX_CHARGE;
     this.atbFill.width = this._atbBarWidth * displayProgress;
     this.atbFill.height = this._atbBarHeight;
-    this.atbFill.setOrigin(1, 0.5);
+    this.atbFill.setOrigin(0, 0.5);
     this.atbFill.visible = hero.alive;
     this.atbBg.visible = hero.alive;
     this.atbLabel.setVisible(hero.alive);
