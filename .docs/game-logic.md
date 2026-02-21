@@ -12,6 +12,8 @@ This document describes the core game logic: constants, entities, combat math, t
 | `CHARGE_PER_TICK` | 1 | Charge gain per tick: `charge += SPD × CHARGE_PER_TICK` |
 | `MIN_DAMAGE` | 0 | Minimum damage any attack can deal |
 | `GUARD_DEF_MULTIPLIER` | 1.1 | When guarding, defender's DEF is multiplied by this (+10% DEF) |
+| `GUARD_ATB_DRAWBACK_WHEN_HIT` | 0.05 | When attacked while guarding, defender loses an extra 5% of the ATB bar |
+| `GUARD_ATB_DRAWBACK_WHEN_NOT_HIT` | 0.1 | When guarding and not attacked (end turn with Guard), hero's ATB set to -10% |
 | `TEAM_SIZE` | 3 | Heroes per team (Pokémon-style) |
 | `ATB_DAMAGE_DRAWBACK` | 0.25 | When a hero receives damage, their ATB bar is reduced by this ratio (25% of the bar) |
 | `ATTACKER_ATB_DRAWBACK` | 0.25 | When a hero attacks, their ATB is set to this negative ratio of the bar (must fill from -25% to 100%) |
@@ -80,7 +82,12 @@ When a hero **receives** damage, their ATB charge is reduced by **25% of the bar
 
 ### ATB drawback (attacker)
 
-When a hero **attacks**, their ATB is set to a **negative** value: `charge = -MAX_CHARGE × ATTACKER_ATB_DRAWBACK` (e.g. -25% of the bar). They must then fill from that value back up to MAX_CHARGE before acting again, so attacking delays their next turn. Guard and Pass do not apply this penalty (they still use the normal consumeTurn() to 0).
+When a hero **attacks**, their ATB is set to a **negative** value: `charge = -MAX_CHARGE × ATTACKER_ATB_DRAWBACK` (e.g. -25% of the bar). They must then fill from that value back up to MAX_CHARGE before acting again. Guard and Pass use their own drawbacks below.
+
+### ATB drawback (guard)
+
+- **When attacked while guarding**: The defender loses an extra **5%** of the bar (`GUARD_ATB_DRAWBACK_WHEN_HIT`), applied after the normal damage ATB drawback.
+- **When guarding and not attacked**: When a hero uses Guard and ends their turn (without being hit before their next turn), their ATB is set to **-10%** (`GUARD_ATB_DRAWBACK_WHEN_NOT_HIT`), so they must fill from -10% to 100% before acting again.
 
 ### API
 

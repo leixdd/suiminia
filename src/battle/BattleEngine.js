@@ -5,7 +5,14 @@
  */
 import { TurnQueue } from './TurnQueue.js';
 import { DamageCalculator } from './DamageCalculator.js';
-import { MAX_CHARGE, ATB_DAMAGE_DRAWBACK, ATTACKER_ATB_DRAWBACK, GUARD_DEF_MULTIPLIER } from '../config/constants.js';
+import {
+  MAX_CHARGE,
+  ATB_DAMAGE_DRAWBACK,
+  ATTACKER_ATB_DRAWBACK,
+  GUARD_DEF_MULTIPLIER,
+  GUARD_ATB_DRAWBACK_WHEN_HIT,
+  GUARD_ATB_DRAWBACK_WHEN_NOT_HIT,
+} from '../config/constants.js';
 
 export class BattleEngine {
   /**
@@ -83,9 +90,13 @@ export class BattleEngine {
       options
     );
     targetHero.takeDamage(damage);
-    // Drawback: taking damage reduces ATB by 25%
+    // Drawback: taking damage reduces ATB
     const drawback = MAX_CHARGE * ATB_DAMAGE_DRAWBACK;
     targetHero.charge = Math.max(0, targetHero.charge - drawback);
+    // Guard drawback: when attacked while guarding, extra ATB penalty
+    if (targetHero.guarding) {
+      targetHero.charge = Math.max(0, targetHero.charge - MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_HIT);
+    }
     this.currentTurnHero.consumeTurn();
     const previousTurn = this.currentTurnHero;
     // Attacker drawback: their ATB is set to a negative value so they must fill more before acting again
@@ -130,6 +141,8 @@ export class BattleEngine {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) return;
     this.currentTurnHero.startGuarding();
     this.currentTurnHero.consumeTurn();
+    // Guard drawback when not attacked: ATB set to negative so they fill more before next turn
+    this.currentTurnHero.charge = -MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_NOT_HIT;
     this.currentTurnHero = null;
     this.turnQueue.tickUntilReady();
     this.currentTurnHero = this.turnQueue.getCurrentTurn();

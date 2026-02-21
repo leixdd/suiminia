@@ -21,6 +21,12 @@ export const MIN_DAMAGE = 0;
 /** When guarding, defender's DEF is multiplied by this value (e.g. 1.1 = +10% DEF). */
 export const GUARD_DEF_MULTIPLIER = 1.1;
 
+/** ATB drawback when attacked while guarding: defender loses this ratio of the bar (e.g. 0.05 = 5%). */
+export const GUARD_ATB_DRAWBACK_WHEN_HIT = 0.05;
+
+/** ATB drawback when guarding and not attacked (end turn with Guard): hero's ATB set to this negative ratio (e.g. 0.1 = -10%). */
+export const GUARD_ATB_DRAWBACK_WHEN_NOT_HIT = 0.1;
+
 /** Default game dimensions (Phaser config) */
 export const GAME_WIDTH = 800;
 export const GAME_HEIGHT = 600;
