@@ -12,6 +12,7 @@ import { PartyPanel } from '../ui/PartyPanel.js';
 import { CommandBar } from '../ui/CommandBar.js';
 import { DebugDamageLog } from '../ui/DebugDamageLog.js';
 import { VictoryOverlay } from '../ui/VictoryOverlay.js';
+import { showCommandPop } from '../ui/CommandPop.js';
 import {
   GAME_WIDTH,
   GAME_HEIGHT,
@@ -99,6 +100,15 @@ export class BattleScene extends Phaser.Scene {
       onAttack: () => this._onAttackClicked(),
       onGuard: () => this._onGuardClicked(),
       onSwitch: () => this._onSwitchClicked(),
+    });
+
+    this.input.keyboard.on('keydown', (event) => {
+      if (this.engine.isBattleOver() || this.engine.pendingPlayerSwitch) return;
+      const current = this.engine.currentTurnHero;
+      if (!current || !this.playerTeam.includes(current)) return;
+      if (event.keyCode === 65) this._onAttackClicked();   // A -> Attack
+      else if (event.keyCode === 68) this._onGuardClicked(); // D -> Guard
+      else if (event.keyCode === 81) this._onSwitchClicked(); // Q -> Switch
     });
 
     this.time.delayedCall(200, () => this.partyPanel.playIn());
@@ -209,7 +219,7 @@ export class BattleScene extends Phaser.Scene {
     const pct1 = Math.round(pActive.chargeProgress() * 100);
     const pct2 = Math.round(eActive.chargeProgress() * 100);
     if (current && this.playerTeam.includes(current)) {
-      this.commandBar.setInstructions('Your turn — choose an action.', 'Attack or Guard (+10% DEF until your next turn).');
+      this.commandBar.setInstructions('Your turn — choose an action.', 'A Attack · D Guard · Q Switch');
     } else if (current && this.enemyTeam.includes(current)) {
       this.commandBar.setInstructions("Enemy's turn.", 'They will act in a moment.');
     } else {
@@ -248,6 +258,9 @@ export class BattleScene extends Phaser.Scene {
 
     const playerActive = this.engine.getPlayerActive();
     const action = getAIAction(current, [playerActive]);
+    const label = !action || action.type === 'pass' ? 'Pass!' : action.type === 'guard' ? 'Guard!' : 'Attack!';
+    showCommandPop(this, this.enemyCard.x, this.enemyCard.y, label);
+
     if (!action || action.type === 'pass') {
       this.engine.actPass();
       return;
@@ -271,14 +284,15 @@ export class BattleScene extends Phaser.Scene {
   _onGuardClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
+    showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Guard!');
     this.engine.actGuard();
   }
 
   _onSwitchClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
+    showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Switch!');
     this.engine.requestVoluntarySwitch();
-    // Switch window will open in update(); after player picks, _confirmSwitchSelection updates UI
   }
 
   _onAttackClicked() {
@@ -286,6 +300,7 @@ export class BattleScene extends Phaser.Scene {
     if (!current || !this.playerTeam.includes(current)) return;
     const target = this.engine.getEnemyActive();
     if (!target.alive) return;
+    showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Attack!');
     const result = this.engine.actAttack(target);
     this.debugDamageLog.addEntry(result);
     if (result.damage > 0) {
