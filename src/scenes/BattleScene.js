@@ -12,6 +12,7 @@ import { PartyPanel } from '../ui/PartyPanel.js';
 import { CommandBar } from '../ui/CommandBar.js';
 import { DebugDamageLog } from '../ui/DebugDamageLog.js';
 import { VictoryOverlay } from '../ui/VictoryOverlay.js';
+import { GameResultScreen } from '../ui/GameResultScreen.js';
 import { showCommandPop } from '../ui/CommandPop.js';
 import {
   GAME_WIDTH,
@@ -95,6 +96,7 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.victoryOverlay = new VictoryOverlay(this);
+    this.gameResultScreen = new GameResultScreen(this);
     this.debugDamageLog = new DebugDamageLog(this);
     this.commandBar = new CommandBar(this, {
       onAttack: () => this._onAttackClicked(),
@@ -126,7 +128,13 @@ export class BattleScene extends Phaser.Scene {
       this._updateCommandBar();
       if (!this._victoryScheduled) {
         this._victoryScheduled = true;
-        this.time.delayedCall(VICTORY_DELAY_MS, () => this.victoryOverlay.show(this.engine.getVictor()));
+        this.time.delayedCall(VICTORY_DELAY_MS, () => {
+          this.gameResultScreen.show(
+            this.engine.getVictor(),
+            this.playerTeam,
+            this.enemyTeam
+          );
+        });
       }
       return;
     }

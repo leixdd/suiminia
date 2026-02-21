@@ -30,6 +30,11 @@ export class Hero {
     this.alive = this.currentHp > 0;
     /** When true, incoming damage uses +10% DEF until next action */
     this.guarding = false;
+
+    /** Battle stats (reset per battle, updated by BattleEngine) */
+    this.timesAttacked = 0;
+    this.damageDealt = 0;
+    this.damageReceived = 0;
   }
 
   /** Start guarding: DEF multiplied by GUARD_DEF_MULTIPLIER on incoming damage until next action */

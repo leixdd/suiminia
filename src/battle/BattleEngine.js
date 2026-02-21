@@ -125,6 +125,9 @@ export class BattleEngine {
     this._checkVictory();
 
     const baseDef = targetHero.def;
+    previousTurn.timesAttacked += 1;
+    previousTurn.damageDealt += damage;
+    targetHero.damageReceived += damage;
     return {
       damage,
       targetAlive: targetHero.alive,
