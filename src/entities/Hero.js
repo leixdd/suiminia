@@ -28,7 +28,7 @@ export class Hero {
     this.charge = 0;
     /** Whether this hero is still in battle (alive) */
     this.alive = this.currentHp > 0;
-    /** When true, incoming damage uses +10% DEF until next action */
+    /** When true, incoming damage uses +10% DEF. Persists until this hero's next action (Attack/Pass/Switch)—i.e. stays true while ATB is filling. */
     this.guarding = false;
 
     /** Battle stats (reset per battle, updated by BattleEngine) */

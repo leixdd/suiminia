@@ -83,6 +83,7 @@ export class BattleEngine {
     const effectiveDef = targetHero.guarding
       ? targetHero.def * GUARD_DEF_MULTIPLIER
       : targetHero.def;
+    // Only the attacker leaves guard when they act; target stays guarding until their next action (while ATB fills).
     this.currentTurnHero.clearGuarding();
     const damage = DamageCalculator.calculate(
       this.currentTurnHero.atk,
@@ -93,7 +94,7 @@ export class BattleEngine {
     // Drawback: taking damage reduces ATB
     const drawback = MAX_CHARGE * ATB_DAMAGE_DRAWBACK;
     targetHero.charge = Math.max(0, targetHero.charge - drawback);
-    // Guard drawback: when attacked while guarding, extra ATB penalty
+    // Guard drawback: when attacked while guarding, extra ATB penalty. Do not clear targetHero.guarding—they stay guarding while ATB fills until their next action.
     if (targetHero.guarding) {
       targetHero.charge = Math.max(0, targetHero.charge - MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_HIT);
     }
@@ -144,7 +145,7 @@ export class BattleEngine {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) return;
     this.currentTurnHero.startGuarding();
     this.currentTurnHero.consumeTurn();
-    // Guard drawback when not attacked: ATB set to negative so they fill more before next turn
+    // Guard persists until this hero's next action (Attack/Pass/Switch). ATB set negative so they fill before next turn.
     this.currentTurnHero.charge = -MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_NOT_HIT;
     this.currentTurnHero = null;
     this.turnQueue.tickUntilReady();
