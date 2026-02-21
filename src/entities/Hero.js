@@ -76,4 +76,23 @@ export class Hero {
   chargeProgress() {
     return Math.max(0, Math.min(1, this.charge / MAX_CHARGE));
   }
+
+  /**
+   * Create a placeholder hero for empty party slots (alive: false, never gets turns).
+   * @param {string} id - e.g. 'player2', 'enemy3'
+   * @returns {Hero}
+   */
+  static createEmpty(id) {
+    const hero = new Hero({
+      id,
+      name: '—',
+      atk: 0,
+      def: 0,
+      spd: 1,
+      maxHp: 1,
+      currentHp: 0,
+    });
+    hero.alive = false;
+    return hero;
+  }
 }

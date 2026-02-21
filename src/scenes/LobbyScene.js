@@ -8,6 +8,7 @@ import {
   GAME_HEIGHT,
   GAME_FONT,
   TEAM_SIZE,
+  MIN_PARTY_SIZE,
 } from '../config/constants.js';
 import { DEFAULT_PLAYER_PARTY, ENEMY_TEAMS } from '../config/teamData.js';
 
@@ -40,13 +41,16 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create() {
-    this.playerParty = DEFAULT_PLAYER_PARTY.map((h, i) => ({ ...h }));
+    this.partySize = 3;
+    this.playerParty = DEFAULT_PLAYER_PARTY.slice(0, this.partySize).map((h) => ({ ...h }));
     this.selectedEnemyTeam = null;
     this.detailsVisible = false;
 
     this._buildLeftPanel();
     this._buildRightPanel();
+    this._buildPartySizeControls();
     this._buildDetailsOverlay();
+    this._updatePartyDisplay();
   }
 
   _buildLeftPanel() {
@@ -131,9 +135,8 @@ export class LobbyScene extends Phaser.Scene {
     const rowW = RIGHT_W - 24;
     for (let i = 0; i < TEAM_SIZE; i++) {
       const y = top + i * (ROW_H + ROW_GAP) + ROW_H / 2;
-      const hero = this.playerParty[i];
       const nameText = this.add
-        .text(RIGHT_CX - rowW / 2 + 12, y - ROW_H / 2 + 6, hero.name, {
+        .text(RIGHT_CX - rowW / 2 + 12, y - ROW_H / 2 + 6, '', {
           fontSize: FONT_SIZE_ROW,
           fontFamily: GAME_FONT,
           color: '#e0e0e0',
@@ -144,10 +147,10 @@ export class LobbyScene extends Phaser.Scene {
         .rectangle(RIGHT_CX, y, rowW, ROW_H, ROW_FILL, 0.95)
         .setStrokeStyle(1, ROW_STROKE)
         .setDepth(DEPTH_PANEL);
-      this.partyRows.push({ bg, nameText, hero });
+      this.partyRows.push({ bg, nameText });
     }
 
-    const detailsY = top + TEAM_SIZE * (ROW_H + ROW_GAP) + 24;
+    const detailsY = top + TEAM_SIZE * (ROW_H + ROW_GAP) + 8;
     this.detailsBtn = this.add
       .text(RIGHT_CX, detailsY, 'View full details', {
         fontSize: 8,
@@ -162,6 +165,60 @@ export class LobbyScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .setDepth(DEPTH_PANEL);
     this.detailsZone.on('pointerdown', () => this._toggleDetails());
+  }
+
+  _buildPartySizeControls() {
+    const top = PANEL_PAD + 40;
+    const sizeY = top + TEAM_SIZE * (ROW_H + ROW_GAP) + 44;
+    this.add
+      .text(RIGHT_CX - 50, sizeY, 'Size:', {
+        fontSize: 8,
+        fontFamily: GAME_FONT,
+        color: '#8b949e',
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(DEPTH_PANEL + 1);
+    this.sizeButtons = [];
+    for (let n = MIN_PARTY_SIZE; n <= TEAM_SIZE; n++) {
+      const x = RIGHT_CX - 20 + (n - 1) * 32;
+      const bg = this.add
+        .rectangle(x, sizeY, 24, 22, ROW_FILL, 0.95)
+        .setStrokeStyle(1, ROW_STROKE)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(DEPTH_PANEL);
+      const label = this.add
+        .text(x, sizeY, String(n), {
+          fontSize: 9,
+          fontFamily: GAME_FONT,
+          color: '#e0e0e0',
+        })
+        .setOrigin(0.5, 0.5)
+        .setDepth(DEPTH_PANEL + 1);
+      bg.on('pointerdown', () => this._setPartySize(n));
+      bg.on('pointerover', () => bg.setStrokeStyle(2, 0x3498db));
+      bg.on('pointerout', () => bg.setStrokeStyle(1, ROW_STROKE));
+      this.sizeButtons.push({ n, bg, label });
+    }
+  }
+
+  _setPartySize(n) {
+    this.partySize = n;
+    this.playerParty = DEFAULT_PLAYER_PARTY.slice(0, this.partySize).map((h) => ({ ...h }));
+    this._updatePartyDisplay();
+  }
+
+  _updatePartyDisplay() {
+    this.partyRows.forEach((row, i) => {
+      const visible = i < this.partySize;
+      row.bg.setVisible(visible);
+      row.nameText.setVisible(visible);
+      if (visible && this.playerParty[i]) {
+        row.nameText.setText(this.playerParty[i].name);
+      }
+    });
+    this.sizeButtons.forEach(({ n, bg }) => {
+      bg.setStrokeStyle(this.partySize === n ? 2 : 1, this.partySize === n ? 0x3498db : ROW_STROKE);
+    });
   }
 
   _buildDetailsOverlay() {
@@ -244,12 +301,15 @@ export class LobbyScene extends Phaser.Scene {
     this.detailsClose.setVisible(this.detailsVisible);
     this.detailsCloseZone.setVisible(this.detailsVisible);
     if (this.detailsVisible) {
-      this.playerParty.forEach((hero, i) => {
-        const row = this.detailsTexts[i];
-        row.nameT.setText(hero.name).setVisible(true);
-        row.statsT
-          .setText(`ATK ${hero.atk}  DEF ${hero.def}  SPD ${hero.spd}  HP ${hero.maxHp}`)
-          .setVisible(true);
+      this.detailsTexts.forEach((row, i) => {
+        const visible = i < this.playerParty.length;
+        row.nameT.setVisible(visible);
+        row.statsT.setVisible(visible);
+        if (visible) {
+          const hero = this.playerParty[i];
+          row.nameT.setText(hero.name);
+          row.statsT.setText(`ATK ${hero.atk}  DEF ${hero.def}  SPD ${hero.spd}  HP ${hero.maxHp}`);
+        }
       });
     } else {
       this.detailsTexts.forEach(({ nameT, statsT }) => {

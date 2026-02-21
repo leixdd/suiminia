@@ -31,8 +31,10 @@ export const GUARD_ATB_DRAWBACK_WHEN_NOT_HIT = 0.1;
 export const GAME_WIDTH = 800;
 export const GAME_HEIGHT = 600;
 
-/** Team size (Pokemon-style: 3 heroes per side, one active at a time) */
+/** Team size (Pokemon-style: up to 3 heroes per side, one active at a time) */
 export const TEAM_SIZE = 3;
+/** Minimum party size (player can fight with 1, 2, or 3 members) */
+export const MIN_PARTY_SIZE = 1;
 
 /** Battle layout: horizontal padding for hero card areas */
 export const BATTLE_PADDING = 100;

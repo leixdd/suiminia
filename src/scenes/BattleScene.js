@@ -4,6 +4,7 @@
  */
 import Phaser from 'phaser';
 import { Hero } from '../entities/Hero.js';
+import { TEAM_SIZE } from '../config/constants.js';
 import { HeroUI } from '../entities/HeroUI.js';
 import { BattleEngine } from '../battle/BattleEngine.js';
 import { getAIAction } from '../battle/Player2AI.js';
@@ -56,16 +57,22 @@ export class BattleScene extends Phaser.Scene {
       { name: 'Blade', atk: 24, def: 6, spd: 6, maxHp: 100 },
       { name: 'Fang', atk: 18, def: 9, spd: 9, maxHp: 100 },
     ];
-    const playerTeam = createTeamHeroes(
+    let playerTeam = createTeamHeroes(
       'player',
       playerConfig.map((h) => h.name),
       playerConfig
     );
-    const enemyTeam = createTeamHeroes(
+    let enemyTeam = createTeamHeroes(
       'enemy',
       enemyConfig.map((h) => h.name),
       enemyConfig
     );
+    while (playerTeam.length < TEAM_SIZE) {
+      playerTeam.push(Hero.createEmpty(`player${playerTeam.length + 1}`));
+    }
+    while (enemyTeam.length < TEAM_SIZE) {
+      enemyTeam.push(Hero.createEmpty(`enemy${enemyTeam.length + 1}`));
+    }
 
     this.playerTeam = playerTeam;
     this.enemyTeam = enemyTeam;
