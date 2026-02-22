@@ -20,16 +20,17 @@ All game windows and major UI components live in **`src/ui/`** (and **`src/entit
 
 ## 2. CommandBar (`src/ui/CommandBar.js`)
 
-**Purpose**: Bottom bar with instructions and **Attack / Skill / Guard / Switch** buttons. Disabled when ATB filling, enemy turn, or when the skill window is open (scene sets instructions to "Choose a skill" and disables all).
+**Purpose**: Bottom bar with instructions and **Skip / Switch / Guard / Skill / Attack** buttons (five buttons). Disabled when ATB filling, enemy turn, or when the skill window is open (scene sets instructions to "Choose a skill" and disables all). When the player's active hero is staggered, **Attack**, **Guard**, and **Skill** are disabled (Skip and Switch remain available).
 
 **API**
 
-- **Constructor**: `new CommandBar(scene, { onAttack, onGuard, onSwitch, onSkill })`
-- **`setInstructions(text, subtext?)`** — Main line and subtext.
-- **`setButtonsVisible(visible)`** — Show/hide all four buttons.
+- **Constructor**: `new CommandBar(scene, { onAttack, onGuard, onSwitch, onSkill, onSkip? })`
+- **`setInstructions(text, subtext?)`** — Main line and subtext (e.g. "A Attack · S Skill · D Guard · Q Switch · P Skip").
+- **`setButtonsVisible(visible)`** — Show/hide all five buttons.
 - **`setButtonsEnabled(enabled)`** — Dim and non-interactive when false.
+- **`setAttackEnabled(enabled)`** — Attack only (e.g. disabled when staggered).
 - **`setGuardEnabled(enabled)`** — Guard only (e.g. disabled when staggered).
-- **`setSkillEnabled(enabled)`** — Skill only (e.g. disabled when hero has no skills).
+- **`setSkillEnabled(enabled)`** — Skill only (e.g. disabled when staggered or no skills).
 
 **Used in**: BattleScene _updateCommandBar; when _skillWindowOpen, all commands disabled.
 
@@ -37,15 +38,15 @@ All game windows and major UI components live in **`src/ui/`** (and **`src/entit
 
 ## 3. SkillSelectionWindow (`src/ui/SkillSelectionWindow.js`)
 
-**Purpose**: Modal "Choose skill" window. Shows **only the current hero's skills** (max 4). On select, invokes **onSelect(skillId)** and **onHide()**; Esc only calls **onHide()**. When open, the scene disables all commands to avoid spamming.
+**Purpose**: Modal "Choose skill" window. Shows **only the current hero's skills** (max 4). On select, invokes **onSelect(skillId)** and **onHide()**; **Esc** cancels and closes (calls **onHide()**). A **capture-phase** keydown listener on the window ensures **Esc** is consumed before Phaser so the game does not pause when closing. When open, the scene disables all commands to avoid spamming.
 
 **API**
 
 - **Constructor**: `new SkillSelectionWindow(scene, { onSelect, onHide? })`
   - **onSelect(skillId)** — Called when the player picks a skill (scene then runs actAttack with that skillId).
   - **onHide()** — Called when the window closes (selection or Esc); scene sets _skillWindowOpen = false.
-- **`show(skillIds)`** — **skillIds**: array of skill IDs from hero config (sliced to MAX_SKILLS_PER_HERO). Resolves IDs to skills, shows up to 4 rows with name and "+X dmg, +Y% ATK". Keys 1–4, ↑↓, Enter, Esc.
-- **`hide()`** — Calls onHide(), hides overlay/panel/rows, removes keyboard listener.
+- **`show(skillIds)`** — **skillIds**: array of skill IDs from hero config (sliced to MAX_SKILLS_PER_HERO). Resolves IDs to skills, shows up to 4 rows with name and "+X dmg, +Y% ATK". Keys 1–4, ↑↓, Enter, **Esc** cancel. Adds Phaser keydown listener and **window** capture-phase listener for Esc.
+- **`hide()`** — Calls onHide(), hides overlay/panel/rows, removes both keyboard and capture-phase listeners.
 
 **Used in**: BattleScene; on Skill click or S key, scene sets _skillWindowOpen and calls show(currentHeroSkillIds). On select, _onSkillSelected(skillId); onHide clears _skillWindowOpen.
 
@@ -53,12 +54,14 @@ All game windows and major UI components live in **`src/ui/`** (and **`src/entit
 
 ## 4. SwitchHeroWindow (`src/ui/SwitchHeroWindow.js`)
 
-**Purpose**: Modal "Choose next hero" when the player must or chooses to switch. Keyboard (1/2/3, ↑↓, Enter) and mouse.
+**Purpose**: Modal "Choose next hero" when the player must or chooses to switch. Keyboard (1/2/3, ↑↓, Enter, **Esc** to close) and mouse. **Esc** uses the same capture-phase listener pattern as SkillSelectionWindow so closing the window does not pause the game.
 
 **API**
 
 - **Constructor**: `new SwitchHeroWindow(scene, { getTeam, onSelect })`
-- **`show()`** / **`hide()`** / **`sync()`** — As before.
+- **`show()`** — Makes window visible, wires rows and stats; adds Phaser keydown listener and **window** capture-phase listener for Esc.
+- **`hide()`** — Hides overlay/panel/rows/stats; removes both keyboard and capture-phase listeners.
+- **`sync()`** — Updates hero list and stats panel from getTeam().
 
 **Used in**: BattleScene when pendingPlayerSwitch; onSelect calls selectNextPlayerHero and updates active UI.
 
@@ -133,11 +136,11 @@ All game windows and major UI components live in **`src/ui/`** (and **`src/entit
 | Module              | Role                                  | When shown / used |
 |---------------------|----------------------------------------|--------------------|
 | PartyPanel          | Team boxes + HP, switch click          | Top; sync every frame; playIn once |
-| CommandBar          | Instructions + Attack/Skill/Guard/Switch | Bottom; disabled when skill window open or not player turn |
-| SkillSelectionWindow| Choose skill (max 4 per hero)         | Modal on Skill/S; disables commands until closed |
-| SwitchHeroWindow    | Choose next hero                      | Modal when pendingPlayerSwitch |
+| CommandBar          | Instructions + Skip/Switch/Guard/Skill/Attack | Bottom; disabled when skill window open or not player turn; Attack/Guard/Skill disabled when staggered |
+| SkillSelectionWindow| Choose skill (max 4 per hero); Esc cancel | Modal on Skill/S; Esc closes without pausing game |
+| SwitchHeroWindow    | Choose next hero; Esc close            | Modal when pendingPlayerSwitch; Esc closes without pausing game |
 | DebugDamageLog      | Damage log (skill name, guard, stagger) | Scrollable; wheel/arrows; addEntry on attack |
 | GameResultScreen    | Result + per-hero stats + Back to Lobby | After battle over (delayed) |
 | VictoryOverlay      | Win/lose/draw text                    | Legacy |
-| CommandPop          | "Attack!" / "Strike!" etc.            | On each command |
+| CommandPop          | "Attack!" / "Skip!" / "Guard!" etc.   | On each command |
 | HeroUI              | Active hero name, HP, ATB, stagger   | One per side; bound to current active |

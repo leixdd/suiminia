@@ -16,7 +16,7 @@ This document describes the core game logic: constants, entities, combat math, s
 | `GUARD_ATB_DRAWBACK_WHEN_NOT_HIT` | 0.1 | When guarding and not attacked, hero's ATB set to -10% |
 | `MAX_STAGGER` | 100 | Stagger meter capacity; when full, hero becomes Staggered |
 | `STAGGER_CHARGE_PER_GUARD_HIT` | 34 | Stagger charge added when hit while guarding (per hit) |
-| `STAGGERED_DAMAGE_MULTIPLIER` | 2 | Damage multiplier when target is Staggered (200%) |
+| `STAGGERED_DAMAGE_MULTIPLIER` | 1.2 | Damage multiplier when target is Staggered (120% damage, +20%) |
 | `TEAM_SIZE` | 3 | Heroes per team |
 | `ATB_DAMAGE_DRAWBACK` | 0.001 | When a hero receives damage, ATB reduced by this ratio |
 | `ATTACKER_ATB_DRAWBACK` | 0.25 | When a hero attacks, ATB set to -25% of bar |
@@ -48,7 +48,7 @@ Single combat unit: stats, HP, ATB charge, guard state, and stagger.
 - **alive**: `currentHp > 0`.
 - **guarding**: When true, incoming damage uses DEF × GUARD_DEF_MULTIPLIER until the hero's next action. **Disabled while staggered.**
 - **stagger** (0..MAX_STAGGER): Stagger meter; fills when hit while guarding.
-- **staggered**: When true, hero takes STAGGERED_DAMAGE_MULTIPLIER (200%) damage and cannot guard until they act.
+- **staggered**: When true, hero takes STAGGERED_DAMAGE_MULTIPLIER (120% damage, +20%); cannot Attack, Guard, or use Skill (only Skip or Switch) until they act or their turn is skipped.
 
 ### Methods
 
@@ -58,7 +58,7 @@ Single combat unit: stats, HP, ATB charge, guard state, and stagger.
 | `consumeTurn()` | Sets `charge = 0` (after acting) |
 | `startGuarding()` | Sets `guarding = true` (cannot use when staggered) |
 | `clearGuarding()` | Sets `guarding = false` |
-| `addStagger(amount)` | Adds to stagger; if ≥ MAX_STAGGER, sets staggered and clears guard |
+| `addStagger(amount)` | Adds to stagger; if ≥ MAX_STAGGER, sets staggered, resets ATB (charge = 0), and clears guard |
 | `clearStaggered()` | Clears staggered (e.g. when hero acts) |
 | `staggerProgress()` | Returns stagger as 0..1 for UI |
 | `takeDamage(amount)` | Applies damage, updates `currentHp` and `alive` |
@@ -78,7 +78,7 @@ final = max(MIN_DAMAGE, base × multiplier)
 ```
 
 With guard: defender uses **DEF × GUARD_DEF_MULTIPLIER** (1.7).  
-With **Staggered** target: `multiplier` includes **STAGGERED_DAMAGE_MULTIPLIER** (2).
+With **Staggered** target: `multiplier` includes **STAGGERED_DAMAGE_MULTIPLIER** (1.2 = 120% damage).
 
 ### Skill damage (`src/data/skills.js`)
 
@@ -100,15 +100,15 @@ Then `DamageCalculator.calculate(power, effectiveDef, options)` gives final dama
 
 ## 4. Status system (`src/battle/StatusSystem.js`)
 
-- **STATUS_STAGGERED**: Hero takes increased damage (see `getDamageTakenMultiplier('staggered')` = 2). Cleared when the hero acts (attack, guard, pass, switch).
+- **STATUS_STAGGERED**: Hero takes increased damage (see `getDamageTakenMultiplier('staggered')` = 1.2, i.e. 120% damage). Cleared when the hero acts (attack, guard, pass, switch).
 
 ---
 
 ## 5. Stagger
 
-- **Charge**: When a hero is **hit while guarding**, they gain **STAGGER_CHARGE_PER_GUARD_HIT** stagger. When stagger ≥ MAX_STAGGER, they become **Staggered** and the meter resets; guard is cleared.
-- **Effect**: Staggered hero takes **200%** damage and **cannot guard** (Guard button disabled, actGuard no-op, AI does not choose Guard).
-- **Clear**: When the hero takes any action (attack, skill, guard, pass, switch), `clearStaggered()` is called.
+- **Charge**: When a hero is **hit while guarding**, they gain **STAGGER_CHARGE_PER_GUARD_HIT** stagger. When stagger ≥ MAX_STAGGER, they become **Staggered**, the meter resets, **ATB is reset to 0**, and guard is cleared.
+- **Effect**: Staggered hero takes **120%** damage (+20%); **cannot Attack, Guard, or use Skill** (only Skip or Switch). Attack/Skill/Guard buttons disabled; actAttack/actGuard no-op for staggered hero.
+- **Clear**: When the hero takes any action (attack, skill, guard, pass, switch), `clearStaggered()` is called. When their turn would come but they are still staggered, the engine **skips** their turn: `clearStaggered()` and `consumeTurn()` so they recover and lose that turn; the next non-staggered ready hero gets the turn (avoids one side being stuck).
 
 ---
 
@@ -150,13 +150,14 @@ Then `DamageCalculator.calculate(power, effectiveDef, options)` gives final dama
 ## 10. Player input
 
 - **Commands** (player's turn, not in switch phase, skill window closed):
-  - **A** → Attack (basic)
-  - **S** → Skill (opens skill selection; choose one to attack with that skill)
+  - **A** → Attack (basic; disabled when player hero is staggered)
+  - **S** → Skill (opens skill selection; disabled when staggered or no skills)
   - **D** → Guard (disabled when staggered)
   - **Q** → Switch (voluntary)
-- **Skill window open**: All command buttons and A/S/D/Q are disabled; only skill window keys (1–4, ↑↓, Enter, Esc) work.
-- Buttons (Attack / Skill / Guard / Switch) mirror keys; disabled when ATB filling, enemy turn, or no skills (Skill).
-- **Switch phase**: Player picks next hero via Switch Hero window (1/2/3, arrows+Enter, or click).
+  - **P** → Skip (pass: consume turn, no action; recovers from stagger)
+- **Skill window open**: All command buttons and A/S/D/Q/P are disabled; only skill window keys (1–4, ↑↓, Enter, **Esc** to cancel) work.
+- Buttons (**Skip**, Attack, Skill, Guard, Switch) mirror keys; disabled when ATB filling, enemy turn, or when staggered (Attack/Skill/Guard only).
+- **Switch phase**: Player picks next hero via Switch Hero window (1/2/3, arrows+Enter, click, or **Esc** to close).
 
 ---
 
