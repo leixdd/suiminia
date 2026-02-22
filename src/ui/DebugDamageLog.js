@@ -111,12 +111,12 @@ export class DebugDamageLog {
   }
 
   /**
-   * @param {{ atk: number, baseDef?: number, effectiveDef: number, damage: number, attacker: { name: string }, target: { name: string }, guarded?: boolean, targetWasStaggered?: boolean }} result
+   * @param {{ atk: number, baseDef?: number, effectiveDef: number, damage: number, attacker: { name: string }, target: { name: string }, guarded?: boolean, targetWasStaggered?: boolean, skill?: { id: string, name: string } }} result
    */
   addEntry(result) {
     if (result.attacker == null || result.atk == null || result.effectiveDef == null) return;
     const heroName = result.attacker.name;
-    const command = 'Attack';
+    const command = result.skill ? result.skill.name : 'Attack';
     const base = `(${result.atk} - ${fmtNum(result.effectiveDef)})`;
     const guardStr = result.guarded ? ` [guard ×${GUARD_DEF_MULTIPLIER}]` : '';
     const staggerStr = result.targetWasStaggered ? ` [stagger ×${STAGGERED_DAMAGE_MULTIPLIER}]` : '';

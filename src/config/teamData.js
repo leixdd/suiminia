@@ -1,15 +1,15 @@
 /**
  * Shared team data for Lobby and Battle.
- * Player hero: { name, atk, def, spd, maxHp? }
- * Enemy hero: { name, atk, def, spd, maxHp?, behavior?, actionRatio? }
+ * Player hero: { name, atk, def, spd, maxHp?, skills? } — skills: up to 4 skill ids
+ * Enemy hero: { name, atk, def, spd, maxHp?, behavior?, actionRatio?, skills? } — skills: up to 4 skill ids
  *   - behavior: 'aggressive' | 'defensive' | 'balanced' (default 'aggressive')
  *   - actionRatio: { attack?: number, guard?: number } for AI probability
  */
 
 export const DEFAULT_PLAYER_PARTY = [
-  { name: 'Alpha', atk: 25, def: 5, spd: 10, maxHp: 100 },
-  { name: 'Beta', atk: 22, def: 8, spd: 7, maxHp: 100 },
-  { name: 'Gamma', atk: 20, def: 10, spd: 5, maxHp: 100 },
+  { name: 'Alpha', atk: 25, def: 5, spd: 10, maxHp: 100, skills: ['basic_strike', 'slash', 'power_strike', 'crush'] },
+  { name: 'Beta', atk: 22, def: 8, spd: 7, maxHp: 100, skills: ['basic_strike', 'heavy_swing', 'barrage'] },
+  { name: 'Gamma', atk: 20, def: 10, spd: 5, maxHp: 100, skills: ['basic_strike', 'slash', 'crush'] },
 ];
 
 /** Enemy teams. Each hero can have its own behavior and actionRatio for campaign/story flexibility. */

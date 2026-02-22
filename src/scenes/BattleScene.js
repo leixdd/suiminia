@@ -9,6 +9,7 @@ import { HeroUI } from '../entities/HeroUI.js';
 import { BattleEngine } from '../battle/BattleEngine.js';
 import { getAIAction } from '../battle/ai/index.js';
 import { SwitchHeroWindow } from '../ui/SwitchHeroWindow.js';
+import { SkillSelectionWindow } from '../ui/SkillSelectionWindow.js';
 import { PartyPanel } from '../ui/PartyPanel.js';
 import { CommandBar } from '../ui/CommandBar.js';
 import { DebugDamageLog } from '../ui/DebugDamageLog.js';
@@ -25,6 +26,7 @@ import {
   GAME_FONT,
 } from '../config/constants.js';
 import { DEFAULT_PLAYER_PARTY } from '../config/teamData.js';
+import { getSkillById, MAX_SKILLS_PER_HERO } from '../data/skills.js';
 
 const AI_TURN_DELAY_MS = 600;
 const VICTORY_DELAY_MS = 1500;
@@ -76,6 +78,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.playerTeam = playerTeam;
     this.enemyTeam = enemyTeam;
+    this.playerPartyConfig = Array.isArray(playerConfig) ? playerConfig : [];
     this.enemyTeamConfig = data.enemyTeam ?? null;
     this._lastEnemyActionByHero = {};
     this.engine = new BattleEngine(playerTeam, enemyTeam);
@@ -118,14 +121,24 @@ export class BattleScene extends Phaser.Scene {
       onAttack: () => this._onAttackClicked(),
       onGuard: () => this._onGuardClicked(),
       onSwitch: () => this._onSwitchClicked(),
+      onSkill: () => this._onSkillClicked(),
     });
 
+    this.skillSelectionWindow = new SkillSelectionWindow(this, {
+      onSelect: (skillId) => this._onSkillSelected(skillId),
+      onHide: () => { this._skillWindowOpen = false; },
+    });
+
+    this._skillWindowOpen = false;
+
     this.input.keyboard.on('keydown', (event) => {
+      if (this._skillWindowOpen) return;
       if (this.engine.isBattleOver() || this.engine.pendingPlayerSwitch) return;
       const current = this.engine.currentTurnHero;
       if (!current || !this.playerTeam.includes(current)) return;
       if (event.keyCode === 65) this._onAttackClicked();   // A -> Attack
       else if (event.keyCode === 68) this._onGuardClicked(); // D -> Guard
+      else if (event.keyCode === 83) this._onSkillClicked(); // S -> Skill
       else if (event.keyCode === 81) this._onSwitchClicked(); // Q -> Switch
     });
 
@@ -229,10 +242,18 @@ export class BattleScene extends Phaser.Scene {
     const isPlayerTurn = current && this.playerTeam.includes(current);
     const canAct = isPlayerTurn && !this.engine.isBattleOver() && !this.engine.pendingPlayerSwitch;
     this.commandBar.setButtonsVisible(!this.engine.isBattleOver());
+    if (this._skillWindowOpen) {
+      this.commandBar.setButtonsEnabled(false);
+      this.commandBar.setGuardEnabled(false);
+      this.commandBar.setSkillEnabled(false);
+      this.commandBar.setInstructions('Choose a skill', '1–4 or \u2191\u2193, Enter · Esc to cancel');
+      return;
+    }
     this.commandBar.setButtonsEnabled(canAct);
     const pActive = this.engine.getPlayerActive();
     const eActive = this.engine.getEnemyActive();
     this.commandBar.setGuardEnabled(canAct && !pActive.staggered);
+    this.commandBar.setSkillEnabled(canAct && this._getCurrentPlayerSkillIds().length > 0);
 
     if (this.engine.isBattleOver()) {
       this.commandBar.setInstructions('Battle over.', '');
@@ -245,7 +266,7 @@ export class BattleScene extends Phaser.Scene {
     const pct1 = Math.round(pActive.chargeProgress() * 100);
     const pct2 = Math.round(eActive.chargeProgress() * 100);
     if (current && this.playerTeam.includes(current)) {
-      this.commandBar.setInstructions('Your turn — choose an action.', 'A Attack · D Guard · Q Switch');
+      this.commandBar.setInstructions('Your turn — choose an action.', 'A Attack · S Skill · D Guard · Q Switch');
     } else if (current && this.enemyTeam.includes(current)) {
       this.commandBar.setInstructions("Enemy's turn.", 'They will act in a moment.');
     } else {
@@ -351,4 +372,33 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  _getCurrentPlayerSkillIds() {
+    const config = this.playerPartyConfig[this.engine.playerActiveIndex];
+    const ids = config?.skills ?? [];
+    return ids.slice(0, MAX_SKILLS_PER_HERO);
+  }
+
+  _onSkillClicked() {
+    const current = this.engine.currentTurnHero;
+    if (!current || !this.playerTeam.includes(current)) return;
+    const target = this.engine.getEnemyActive();
+    if (!target.alive) return;
+    const skillIds = this._getCurrentPlayerSkillIds();
+    if (skillIds.length === 0) return;
+    this._skillWindowOpen = true;
+    this.skillSelectionWindow.show(skillIds);
+  }
+
+  _onSkillSelected(skillId) {
+    const target = this.engine.getEnemyActive();
+    if (!target?.alive) return;
+    const skill = getSkillById(skillId);
+    const label = skill ? `${skill.name}!` : 'Attack!';
+    showCommandPop(this, this.playerCard.x, this.playerCard.y, label);
+    const result = this.engine.actAttack(target, { skillId });
+    this.debugDamageLog.addEntry(result);
+    if (result.damage > 0) {
+      this._showDamagePop(this.enemyCard.x, this.enemyCard.y, result.damage);
+    }
+  }
 }

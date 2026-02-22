@@ -15,6 +15,7 @@ import {
   STAGGER_CHARGE_PER_GUARD_HIT,
 } from '../config/constants.js';
 import { STATUS_STAGGERED, getDamageTakenMultiplier } from './StatusSystem.js';
+import { getSkillById, getSkillPower } from '../data/skills.js';
 
 export class BattleEngine {
   /**
@@ -87,13 +88,18 @@ export class BattleEngine {
       : targetHero.def;
     // Only the attacker leaves guard when they act; target stays guarding until their next action (while ATB fills).
     this.currentTurnHero.clearGuarding();
+    // Skill: use skill power (Attack + SkillDamage) + (Attack × multiplier) as effective ATK; otherwise use raw ATK
+    const skill = options.skillId ? getSkillById(options.skillId) : null;
+    const effectiveAtk = skill
+      ? getSkillPower(this.currentTurnHero.atk, skill)
+      : this.currentTurnHero.atk;
     // Staggered status: target takes increased damage (200%)
     const baseMultiplier = options.multiplier ?? 1;
     const damageMultiplier = targetHero.staggered
       ? baseMultiplier * getDamageTakenMultiplier(STATUS_STAGGERED)
       : baseMultiplier;
     const damage = DamageCalculator.calculate(
-      this.currentTurnHero.atk,
+      effectiveAtk,
       effectiveDef,
       { ...options, multiplier: damageMultiplier }
     );
@@ -144,11 +150,12 @@ export class BattleEngine {
       targetAlive: targetHero.alive,
       attacker: previousTurn,
       target: targetHero,
-      atk: previousTurn.atk,
+      atk: effectiveAtk,
       baseDef,
       effectiveDef,
       guarded: targetHero.guarding,
       targetWasStaggered: targetHero.staggered,
+      skill: skill ? { id: skill.id, name: skill.name } : null,
     };
   }
 

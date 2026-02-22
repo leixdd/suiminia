@@ -15,24 +15,27 @@ const BAR_HEIGHT = 56;
 const GAP = 4;
 const FEEDBACK_WIDTH = (GAME_WIDTH * 4) / 12;
 const COMMAND_WIDTH = (GAME_WIDTH * 8) / 12;
-const BTN_W = 88;
+const BTN_W = 72;
 const BTN_H = 40;
-const BTN_GAP = 12;
+const BTN_GAP = 8;
 
 export class CommandBar {
   /**
    * @param {Phaser.Scene} scene
-   * @param {{ onAttack: () => void, onGuard: () => void, onSwitch: () => void }} callbacks
+   * @param {{ onAttack: () => void, onGuard: () => void, onSwitch: () => void, onSkill: () => void }} callbacks
    */
   constructor(scene, callbacks) {
     this.scene = scene;
     this.onAttack = callbacks.onAttack;
     this.onGuard = callbacks.onGuard;
     this.onSwitch = callbacks.onSwitch;
+    this.onSkill = callbacks.onSkill ?? (() => {});
 
     const bottomBarY = GAME_HEIGHT - BAR_HEIGHT / 2;
     const feedbackCenterX = FEEDBACK_WIDTH / 2;
     const commandCenterX = GAME_WIDTH * (4 / 12) + COMMAND_WIDTH / 2;
+    const fourBtnTotal = 4 * BTN_W + 3 * BTN_GAP;
+    const startX = commandCenterX - fourBtnTotal / 2 + BTN_W / 2 + BTN_GAP / 2;
 
     scene.add
       .rectangle(feedbackCenterX, bottomBarY, FEEDBACK_WIDTH - GAP / 2, BAR_HEIGHT, 0x2c3e50, 0.95)
@@ -60,14 +63,17 @@ export class CommandBar {
       .setOrigin(0.5, 0)
       .setDepth(UI_DEPTH + 1);
 
-    const switchX = commandCenterX - BTN_GAP - BTN_W;
-    const guardX = commandCenterX;
-    const attackX = commandCenterX + BTN_GAP + BTN_W;
+    const switchX = startX;
+    const guardX = startX + BTN_W + BTN_GAP;
+    const skillX = startX + 2 * (BTN_W + BTN_GAP);
+    const attackX = startX + 3 * (BTN_W + BTN_GAP);
 
     this.switchBtn = this._addButton(switchX, bottomBarY, 'Switch', 0x9b59b6, () => this.onSwitch());
     this.switchBtnText = this._addButtonText(switchX, bottomBarY, 'Switch');
     this.guardBtn = this._addButton(guardX, bottomBarY, 'Guard', 0x3498db, () => this.onGuard());
     this.guardBtnText = this._addButtonText(guardX, bottomBarY, 'Guard');
+    this.skillBtn = this._addButton(skillX, bottomBarY, 'Skill', 0xe67e22, () => this.onSkill());
+    this.skillBtnText = this._addButtonText(skillX, bottomBarY, 'Skill');
     this.attackBtn = this._addButton(attackX, bottomBarY, 'Attack', 0x2ecc71, () => this.onAttack());
     this.attackBtnText = this._addButtonText(attackX, bottomBarY, 'Attack');
   }
@@ -107,6 +113,8 @@ export class CommandBar {
     this.attackBtnText.setVisible(visible);
     this.guardBtn.setVisible(visible);
     this.guardBtnText.setVisible(visible);
+    this.skillBtn.setVisible(visible);
+    this.skillBtnText.setVisible(visible);
     this.switchBtn.setVisible(visible);
     this.switchBtnText.setVisible(visible);
   }
@@ -114,10 +122,9 @@ export class CommandBar {
   /** When false, buttons are dimmed and not clickable (ATB filling or not player turn). */
   setButtonsEnabled(enabled) {
     const alpha = enabled ? 1 : 0.45;
-    [this.attackBtn, this.attackBtnText, this.guardBtn, this.guardBtnText, this.switchBtn, this.switchBtnText].forEach((o) => {
-      o.setAlpha(alpha);
-    });
-    [this.attackBtn, this.guardBtn, this.switchBtn].forEach((btn) => {
+    const all = [this.attackBtn, this.attackBtnText, this.guardBtn, this.guardBtnText, this.skillBtn, this.skillBtnText, this.switchBtn, this.switchBtnText];
+    all.forEach((o) => o.setAlpha(alpha));
+    [this.attackBtn, this.guardBtn, this.skillBtn, this.switchBtn].forEach((btn) => {
       btn.setData('enabled', enabled);
       if (enabled) btn.setInteractive({ useHandCursor: true });
       else btn.disableInteractive();
@@ -132,5 +139,15 @@ export class CommandBar {
     this.guardBtn.setData('enabled', enabled);
     if (enabled) this.guardBtn.setInteractive({ useHandCursor: true });
     else this.guardBtn.disableInteractive();
+  }
+
+  /** When false, Skill button is dimmed and not clickable. Call after setButtonsEnabled when it's player turn. */
+  setSkillEnabled(enabled) {
+    const alpha = enabled ? 1 : 0.45;
+    this.skillBtn.setAlpha(alpha);
+    this.skillBtnText.setAlpha(alpha);
+    this.skillBtn.setData('enabled', enabled);
+    if (enabled) this.skillBtn.setInteractive({ useHandCursor: true });
+    else this.skillBtn.disableInteractive();
   }
 }
