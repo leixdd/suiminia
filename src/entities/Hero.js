@@ -61,6 +61,7 @@ export class Hero {
     if (this.stagger >= MAX_STAGGER) {
       this.staggered = true;
       this.stagger = 0;
+      this.clearGuarding(); // Guarding is disabled while staggered
     }
   }
 

@@ -228,6 +228,9 @@ export class BattleScene extends Phaser.Scene {
     const canAct = isPlayerTurn && !this.engine.isBattleOver() && !this.engine.pendingPlayerSwitch;
     this.commandBar.setButtonsVisible(!this.engine.isBattleOver());
     this.commandBar.setButtonsEnabled(canAct);
+    const pActive = this.engine.getPlayerActive();
+    const eActive = this.engine.getEnemyActive();
+    this.commandBar.setGuardEnabled(canAct && !pActive.staggered);
 
     if (this.engine.isBattleOver()) {
       this.commandBar.setInstructions('Battle over.', '');
@@ -237,8 +240,6 @@ export class BattleScene extends Phaser.Scene {
       this.commandBar.setInstructions('Choose your next hero!', 'Press 1/2/3 or \u2191\u2193 + Enter, or click a hero.');
       return;
     }
-    const pActive = this.engine.getPlayerActive();
-    const eActive = this.engine.getEnemyActive();
     const pct1 = Math.round(pActive.chargeProgress() * 100);
     const pct2 = Math.round(eActive.chargeProgress() * 100);
     if (current && this.playerTeam.includes(current)) {
@@ -307,6 +308,7 @@ export class BattleScene extends Phaser.Scene {
   _onGuardClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
+    if (current.staggered) return; // Guard disabled while staggered
     showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Guard!');
     this.engine.actGuard();
   }

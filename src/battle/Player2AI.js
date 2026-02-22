@@ -20,7 +20,7 @@ export function getAIAction(aiHero, enemies) {
   if (aliveEnemies.length === 0) return { type: 'pass' };
 
   const hpRatio = aiHero.currentHp / aiHero.maxHp;
-  if (hpRatio <= GUARD_HP_THRESHOLD) {
+  if (hpRatio <= GUARD_HP_THRESHOLD && !aiHero.staggered) {
     return { type: 'guard' };
   }
 

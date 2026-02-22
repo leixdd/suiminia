@@ -154,6 +154,7 @@ export class BattleEngine {
 
   actGuard() {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) return;
+    if (this.currentTurnHero.staggered) return; // Guarding disabled while staggered
     this.currentTurnHero.clearStaggered();
     this.currentTurnHero.startGuarding();
     this.currentTurnHero.consumeTurn();

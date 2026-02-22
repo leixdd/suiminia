@@ -123,4 +123,14 @@ export class CommandBar {
       else btn.disableInteractive();
     });
   }
+
+  /** When false, Guard button is dimmed and not clickable (e.g. when staggered). Call after setButtonsEnabled when it's player turn. */
+  setGuardEnabled(enabled) {
+    const alpha = enabled ? 1 : 0.45;
+    this.guardBtn.setAlpha(alpha);
+    this.guardBtnText.setAlpha(alpha);
+    this.guardBtn.setData('enabled', enabled);
+    if (enabled) this.guardBtn.setInteractive({ useHandCursor: true });
+    else this.guardBtn.disableInteractive();
+  }
 }
