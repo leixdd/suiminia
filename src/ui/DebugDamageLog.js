@@ -7,6 +7,7 @@ import {
   GAME_FONT,
   FONT_SIZE_DEBUG_UI,
   GUARD_DEF_MULTIPLIER,
+  STAGGERED_DAMAGE_MULTIPLIER,
 } from '../config/constants.js';
 
 const DEPTH = 450;
@@ -74,32 +75,53 @@ export class DebugDamageLog {
     this.lineHeight = LINE_HEIGHT;
     this.maxLines = MAX_LINES;
 
+    const scrollBy = (delta) => {
+      const maxScroll = Math.max(0, this.contentHeight - this.contentHeightVal);
+      this.scroll = Phaser.Math.Clamp(this.scroll + delta, 0, maxScroll);
+      this._updateScroll();
+    };
+
     scene.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       const { left, right, top, bottom } = this.bounds;
       if (pointer.x >= left && pointer.x <= right && pointer.y >= top && pointer.y <= bottom) {
-        const maxScroll = Math.max(0, this.contentHeight - contentHeight);
-        this.scroll = Phaser.Math.Clamp(this.scroll + deltaY, 0, maxScroll);
-        this._updateScroll();
+        scrollBy(deltaY);
       }
     });
+
+    const keyDown = (event) => {
+      const maxScroll = Math.max(0, this.contentHeight - this.contentHeightVal);
+      if (maxScroll <= 0) return;
+      const step = this.lineHeight * 2;
+      if (event.keyCode === 38) {
+        event.preventDefault();
+        scrollBy(step);
+      } else if (event.keyCode === 40) {
+        event.preventDefault();
+        scrollBy(-step);
+      }
+    };
+    scene.input.keyboard.on('keydown', keyDown);
+    this._keydownListener = keyDown;
+  }
+
+  destroy() {
+    if (this._keydownListener) {
+      this.scene.input.keyboard.off('keydown', this._keydownListener);
+    }
   }
 
   /**
-   * @param {{ atk: number, baseDef?: number, effectiveDef: number, damage: number, attacker: { name: string }, target: { name: string }, guarded?: boolean }} result
+   * @param {{ atk: number, baseDef?: number, effectiveDef: number, damage: number, attacker: { name: string }, target: { name: string }, guarded?: boolean, targetWasStaggered?: boolean }} result
    */
   addEntry(result) {
     if (result.attacker == null || result.atk == null || result.effectiveDef == null) return;
-    const baseDef = result.baseDef ?? result.effectiveDef;
-    const guardPct = Math.round((GUARD_DEF_MULTIPLIER - 1) * 100);
-    const guardStr = result.guarded ? ` (guard +${guardPct}% DEF)` : '';
-    const staggerStr = result.targetWasStaggered ? ' [STAGGERED 2×]' : '';
-    const summaryLine = `${result.attacker.name} ${result.atk} ATK vs ${result.target.name} ${fmtNum(result.effectiveDef)} DEF${guardStr}${staggerStr} → ${fmtNum(result.damage)} dmg`;
-    let formulaLine;
-    if (result.guarded) {
-      formulaLine = `  effective_def = ${baseDef} × ${GUARD_DEF_MULTIPLIER} = ${fmtNum(result.effectiveDef)}; dmg = ${fmtNum(result.damage)}`;
-    } else {
-      formulaLine = `  max(1, atk - def) = max(1, ${result.atk} - ${fmtNum(result.effectiveDef)}) = ${fmtNum(result.damage)}`;
-    }
+    const heroName = result.attacker.name;
+    const command = 'Attack';
+    const base = `(${result.atk} - ${fmtNum(result.effectiveDef)})`;
+    const guardStr = result.guarded ? ` [guard ×${GUARD_DEF_MULTIPLIER}]` : '';
+    const staggerStr = result.targetWasStaggered ? ` [stagger ×${STAGGERED_DAMAGE_MULTIPLIER}]` : '';
+    const damageCalc = `${base}${guardStr}${staggerStr} = ${fmtNum(result.damage)}`;
+    const line = `${heroName}: ${command} ${damageCalc}`;
 
     const addLine = (str, color) => {
       const y = this.contentHeight;
@@ -110,22 +132,20 @@ export class DebugDamageLog {
       this.entries.push({ text, y });
       this.contentHeight += this.lineHeight;
     };
-    addLine(summaryLine, '#b0b0b0');
-    addLine(formulaLine, '#8b949e');
+    addLine(line, '#b0b0b0');
 
     while (this.entries.length > this.maxLines) {
       const old = this.entries.shift();
       old.text.destroy();
-      const old2 = this.entries.shift();
-      old2.text.destroy();
-      for (let i = 0; i < this.entries.length; i++) {
-        this.entries[i].text.y = i * this.lineHeight;
-        this.entries[i].y = i * this.lineHeight;
-      }
-      this.contentHeight = this.entries.length * this.lineHeight;
     }
+    for (let i = 0; i < this.entries.length; i++) {
+      this.entries[i].text.y = i * this.lineHeight;
+      this.entries[i].y = i * this.lineHeight;
+    }
+    this.contentHeight = this.entries.length * this.lineHeight;
 
-    this.scroll = Math.max(0, this.contentHeight - this.contentHeightVal);
+    // Always scroll to bottom (newest entry) when there is a new update
+    this.scroll = 0;
     this._updateScroll();
   }
 
