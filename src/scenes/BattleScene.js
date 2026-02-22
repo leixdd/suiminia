@@ -274,18 +274,18 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  _showDamagePop(x, y, amount) {
+  _showDamagePop(x, y, amount, color = '#ffffff', scale = 0.5, isMultipleHitsTotal = false) {
     const startY = y - 15;
     const endY = startY - 55;
     const dmgText = this.add
-      .text(x, startY, `-${fmtNum(amount)}`, {
+      .text(x, startY, `${isMultipleHitsTotal ? '' : '-'}${fmtNum(amount)}`, {
         fontSize: FONT_SIZE_DAMAGE_POP,
         fontFamily: GAME_FONT,
-        color: '#ffffff',
+        color: color,
         fontStyle: 'bold',
       })
       .setOrigin(0.5)
-      .setScale(0.5)
+      .setScale(scale)
       .setDepth(600);
     this.tweens.add({ targets: dmgText, scale: 1.15, duration: 280, ease: 'Back.Out' });
     this.tweens.add({
@@ -298,7 +298,7 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  /** Show damage pop(s). If result.hitDamages has multiple values, show one pop per hit with staggered delay. */
+  /** Show damage pop(s). If result.hitDamages has multiple values, show one pop per hit with staggered delay, then a total damage pop. */
   _showDamagePops(x, y, result) {
     if (result.damage <= 0) return;
     const hits = result.hitDamages;
@@ -307,6 +307,9 @@ export class BattleScene extends Phaser.Scene {
       hits.forEach((amount, i) => {
         this.time.delayedCall(i * delayMs, () => this._showDamagePop(x, y, amount));
       });
+      // Total damage pop after per-hit pops, slightly offset so it stays visible alongside them
+      const totalPopDelayMs = hits.length * (delayMs + 50);
+      this.time.delayedCall(totalPopDelayMs, () => this._showDamagePop(x + 28, y, result.damage, 'yellow', 0.9, true));
     } else {
       this._showDamagePop(x, y, result.damage);
     }
