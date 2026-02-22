@@ -31,8 +31,8 @@ export const GUARD_ATB_DRAWBACK_WHEN_NOT_HIT = 0.1;
 export const MAX_STAGGER = 100;
 /** Stagger charge added when the hero is hit while guarding (per hit). */
 export const STAGGER_CHARGE_PER_GUARD_HIT = 34;
-/** Damage multiplier when target is Staggered (4 = 400% damage). */
-export const STAGGERED_DAMAGE_MULTIPLIER = 4;
+/** Damage multiplier when target is Staggered (1.2 = 120% damage). */
+export const STAGGERED_DAMAGE_MULTIPLIER = 1.2;
 
 /** Default game dimensions (Phaser config) */
 export const GAME_WIDTH = 800;

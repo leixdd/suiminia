@@ -49,6 +49,28 @@ export class BattleEngine {
     this.turnQueue = new TurnQueue(this._getActiveHeroes());
   }
 
+  /**
+   * Advance time until someone is ready, then return the next hero who should act (skipping staggered heroes).
+   * Staggered heroes lose their turn (ATB reset) and recover from stagger; time advances until a non-staggered hero is ready.
+   * @returns {import('../entities/Hero.js').Hero | null}
+   */
+  _getNextTurnHero() {
+    const maxAttempts = 20;
+    this.turnQueue.tickUntilReady();
+    const ready = this.turnQueue.getCurrentTurn();
+    if (!ready) return null;
+    if (ready.staggered) {
+      for (let i = 0; i < maxAttempts; i++) {
+        ready.consumeTurn();
+        console.log('staggered hero', ready.name);
+        continue;
+      }
+      ready.clearStaggered();
+      console.log('staggered hero', ready.name);
+    }
+    return ready;
+  }
+
   /** @returns {import('../entities/Hero.js').Hero} */
   getPlayerActive() {
     return this.playerTeam[this.playerActiveIndex];
@@ -71,6 +93,7 @@ export class BattleEngine {
     this.turnQueue.tick();
     const ready = this.turnQueue.getCurrentTurn();
     if (ready?.staggered) {
+      ready.clearStaggered();
       ready.consumeTurn();
       this.currentTurnHero = null;
     } else {
@@ -146,14 +169,12 @@ export class BattleEngine {
       this.enemyTeam[this.enemyActiveIndex] === targetHero;
 
     if (targetHero.alive) {
-      this.turnQueue.tickUntilReady();
-      this.currentTurnHero = this.turnQueue.getCurrentTurn();
+      this.currentTurnHero = this._getNextTurnHero();
     } else {
       if (targetWasPlayerActive) this.pendingPlayerSwitch = true;
       if (targetWasEnemyActive) this.pendingEnemySwitch = true;
       if (!this.pendingPlayerSwitch && !this.pendingEnemySwitch) {
-        this.turnQueue.tickUntilReady();
-        this.currentTurnHero = this.turnQueue.getCurrentTurn();
+        this.currentTurnHero = this._getNextTurnHero();
       }
     }
 
@@ -190,8 +211,7 @@ export class BattleEngine {
     // Guard persists until this hero's next action (Attack/Pass/Switch). ATB set negative so they fill before next turn.
     this.currentTurnHero.charge = -MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_NOT_HIT;
     this.currentTurnHero = null;
-    this.turnQueue.tickUntilReady();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    this.currentTurnHero = this._getNextTurnHero();
   }
 
   actPass() {
@@ -200,8 +220,7 @@ export class BattleEngine {
     this.currentTurnHero.clearGuarding();
     this.currentTurnHero.consumeTurn();
     this.currentTurnHero = null;
-    this.turnQueue.tickUntilReady();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    this.currentTurnHero = this._getNextTurnHero();
   }
 
   /**
@@ -231,8 +250,7 @@ export class BattleEngine {
     this.playerActiveIndex = index;
     this._rebuildTurnQueue();
     this.pendingPlayerSwitch = false;
-    this.turnQueue.tickUntilReady();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    this.currentTurnHero = this._getNextTurnHero();
     return true;
   }
 
@@ -249,8 +267,7 @@ export class BattleEngine {
     this.enemyActiveIndex = chosen.i;
     this._rebuildTurnQueue();
     this.pendingEnemySwitch = false;
-    this.turnQueue.tickUntilReady();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    this.currentTurnHero = this._getNextTurnHero();
     return true;
   }
 
