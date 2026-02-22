@@ -7,7 +7,7 @@ import { Hero } from '../entities/Hero.js';
 import { TEAM_SIZE } from '../config/constants.js';
 import { HeroUI } from '../entities/HeroUI.js';
 import { BattleEngine } from '../battle/BattleEngine.js';
-import { getAIAction } from '../battle/Player2AI.js';
+import { getAIAction } from '../battle/ai/index.js';
 import { SwitchHeroWindow } from '../ui/SwitchHeroWindow.js';
 import { PartyPanel } from '../ui/PartyPanel.js';
 import { CommandBar } from '../ui/CommandBar.js';
@@ -76,6 +76,8 @@ export class BattleScene extends Phaser.Scene {
 
     this.playerTeam = playerTeam;
     this.enemyTeam = enemyTeam;
+    this.enemyTeamConfig = data.enemyTeam ?? null;
+    this._lastEnemyActionByHero = {};
     this.engine = new BattleEngine(playerTeam, enemyTeam);
 
     const centerY = GAME_HEIGHT / 2;
@@ -275,13 +277,29 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  /** Get AI config for an enemy hero (behavior, actionRatio) by slot index. */
+  _getEnemyHeroConfig(hero) {
+    if (!this.enemyTeamConfig?.heroes) return null;
+    const index = this.enemyTeam.indexOf(hero);
+    if (index < 0) return null;
+    return this.enemyTeamConfig.heroes[index] ?? null;
+  }
+
   _executeAI() {
     if (this.engine.isBattleOver()) return;
     const current = this.engine.currentTurnHero;
     if (!current || !this.enemyTeam.includes(current)) return;
 
+    const heroConfig = this._getEnemyHeroConfig(current);
     const playerActive = this.engine.getPlayerActive();
-    const action = getAIAction(current, [playerActive]);
+    const aiOptions = {
+      behavior: heroConfig?.behavior,
+      actionRatio: heroConfig?.actionRatio,
+      lastAction: this._lastEnemyActionByHero[current.id],
+    };
+    const action = getAIAction(current, [playerActive], aiOptions);
+    this._lastEnemyActionByHero[current.id] = action?.type ?? null;
+
     const label = !action || action.type === 'pass' ? 'Pass!' : action.type === 'guard' ? 'Guard!' : 'Attack!';
     showCommandPop(this, this.enemyCard.x, this.enemyCard.y, label);
 
