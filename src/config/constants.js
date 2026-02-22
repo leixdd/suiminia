@@ -19,7 +19,7 @@ export const ATTACKER_ATB_DRAWBACK = 0.25;
 export const MIN_DAMAGE = 0;
 
 /** When guarding, defender's DEF is multiplied by this value (e.g. 1.1 = +10% DEF). */
-export const GUARD_DEF_MULTIPLIER = 1.1;
+export const GUARD_DEF_MULTIPLIER = 1.7;
 
 /** ATB drawback when attacked while guarding: defender loses this ratio of the bar (e.g. 0.05 = 5%). */
 export const GUARD_ATB_DRAWBACK_WHEN_HIT = 0.05;
