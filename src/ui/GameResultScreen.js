@@ -82,8 +82,11 @@ export class GameResultScreen {
    * @param {'player' | 'enemy' | null} winner
    * @param {import('../entities/Hero.js').Hero[]} playerTeam
    * @param {import('../entities/Hero.js').Hero[]} enemyTeam
+   * @param {{ onBack?: () => void, backLabel?: string }} options - if onBack provided, called when Back is clicked; else starts Lobby
    */
-  show(winner, playerTeam, enemyTeam) {
+  show(winner, playerTeam, enemyTeam, options = {}) {
+    this._onBack = options.onBack || (() => this.scene.scene.start('Lobby'));
+    this._backLabel = options.backLabel ?? 'Back to Lobby';
     this._clear();
     this.overlay.setVisible(true);
     this.panel.setVisible(true);
@@ -190,14 +193,14 @@ export class GameResultScreen {
       .setDepth(DEPTH + 2);
     this._backZone.on('pointerdown', () => {
       this.hide();
-      this.scene.scene.start('Lobby');
+      this._onBack();
     });
     this._backZone.on('pointerover', () => this._backZone.setStrokeStyle(2, 0xf1c40f));
     this._backZone.on('pointerout', () => this._backZone.setStrokeStyle(2, PANEL_STROKE));
     this.container.add(this._backZone);
 
     this._backBtn = this.scene.add
-      .text(cx, backY, 'Back to Lobby', {
+      .text(cx, backY, this._backLabel, {
         fontSize: FONT_SIZE_ROW,
         fontFamily: GAME_FONT,
         color: TITLE_COLOR,

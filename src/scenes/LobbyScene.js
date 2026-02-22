@@ -54,9 +54,30 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   _buildLeftPanel() {
-    const top = PANEL_PAD + 40;
+    const campaignBtnY = PANEL_PAD + 12;
+    const campaignZone = this.add
+      .rectangle(LEFT_CX, campaignBtnY + 14, 140, 28, ROW_FILL, 0.95)
+      .setStrokeStyle(2, PANEL_STROKE)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(DEPTH_PANEL);
     this.add
-      .text(LEFT_CX, PANEL_PAD + 12, 'Choose opponent', {
+      .text(LEFT_CX, campaignBtnY + 14, 'Campaign', {
+        fontSize: FONT_SIZE_ROW,
+        fontFamily: GAME_FONT,
+        color: '#f1c40f',
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH_PANEL + 1);
+    campaignZone.on('pointerdown', () => {
+      this.registry.set('campaignPlayerParty', this.playerParty.map((h) => ({ ...h })));
+      this.scene.start('Map');
+    });
+    campaignZone.on('pointerover', () => campaignZone.setStrokeStyle(2, 0xf1c40f));
+    campaignZone.on('pointerout', () => campaignZone.setStrokeStyle(2, PANEL_STROKE));
+
+    const top = PANEL_PAD + 40 + 28;
+    this.add
+      .text(LEFT_CX, top - 28 + 12, 'Choose opponent', {
         fontSize: FONT_SIZE_HEADER,
         fontFamily: GAME_FONT,
         color: '#3498db',

@@ -8,6 +8,7 @@ import { BootScene } from './scenes/BootScene.js';
 import { PreloadScene } from './scenes/PreloadScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 import { LobbyScene } from './scenes/LobbyScene.js';
+import { MapScene } from './scenes/MapScene.js';
 import { BattleScene } from './scenes/BattleScene.js';
 
 const config = {
@@ -24,7 +25,7 @@ const config = {
     default: 'arcade',
     arcade: { debug: false },
   },
-  scene: [BootScene, PreloadScene, TitleScene, LobbyScene, BattleScene],
+  scene: [BootScene, PreloadScene, TitleScene, LobbyScene, MapScene, BattleScene],
 };
 
 const game = new Phaser.Game(config);

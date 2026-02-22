@@ -80,6 +80,8 @@ export class BattleScene extends Phaser.Scene {
     this.enemyTeam = enemyTeam;
     this.playerPartyConfig = Array.isArray(playerConfig) ? playerConfig : [];
     this.enemyTeamConfig = data.enemyTeam ?? null;
+    this._returnScene = data.returnScene || 'Lobby';
+    this._returnData = data.returnData || {};
     this._lastEnemyActionByHero = {};
     this.engine = new BattleEngine(playerTeam, enemyTeam);
 
@@ -168,10 +170,22 @@ export class BattleScene extends Phaser.Scene {
       if (!this._victoryScheduled) {
         this._victoryScheduled = true;
         this.time.delayedCall(VICTORY_DELAY_MS, () => {
+          const winner = this.engine.getVictor();
+          const onBack = () => {
+            if (this._returnScene === 'Map' && winner === 'player' && this._returnData.campaignNodeId) {
+              const cleared = this.registry.get('campaignCleared') || [];
+              this.registry.set('campaignCleared', [...cleared, this._returnData.campaignNodeId]);
+            }
+            this.scene.start(this._returnScene, this._returnData);
+          };
           this.gameResultScreen.show(
-            this.engine.getVictor(),
+            winner,
             this.playerTeam,
-            this.enemyTeam
+            this.enemyTeam,
+            {
+              onBack,
+              backLabel: this._returnScene === 'Map' ? 'Back to Map' : 'Back to Lobby',
+            }
           );
         });
       }
