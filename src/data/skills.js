@@ -15,6 +15,7 @@
  * @property {number} skillDamage - Flat damage added to ATK
  * @property {number} damageMultiplier - Extra ATK scaling (e.g. 0.2 = +20% of ATK)
  * @property {number} [hits] - Number of hits (default 1). The attack runs this many times in a loop (full damage each hit); stagger/ATB apply per hit when guarding.
+ * @property {number | number[]} [mhdmphp] - Multiple hits damage modifier per hit (0..1). If number: first hit = 100%, subsequent hits = this value (e.g. 0.8 = 80%). If array: [mod hit1, mod hit2, ...] for full control (e.g. [1.0, 0.8, 0.3] = strong first, weaker follow-ups).
  */
 
 /** Maximum number of skills a hero can have. */
@@ -69,6 +70,7 @@ export const SKILLS = [
     skillDamage: 3,
     damageMultiplier: 0,
     hits: 3,
+    mhdmphp: [1.0, 0.8, 0.1],
   },
 ];
 
@@ -84,6 +86,22 @@ export function getSkillPower(atk, skill) {
   const flat = atk + (skill.skillDamage ?? 0);
   const scaled = atk * (skill.damageMultiplier ?? 0);
   return flat + scaled;
+}
+
+/**
+ * Get the damage modifier for one hit in a multi-hit skill (mhdmphp).
+ * @param {number} hitIndex - 0-based hit index
+ * @param {number} hits - Total number of hits
+ * @param {number | number[]} [mhdmphp] - Skill's mhdmphp (number or array)
+ * @returns {number} Multiplier for this hit (1 = 100%)
+ */
+export function getMultiHitDamageModifier(hitIndex, hits, mhdmphp) {
+  if (hits <= 1 || mhdmphp == null) return 1;
+  if (typeof mhdmphp === 'number') {
+    return hitIndex === 0 ? 1 : mhdmphp;
+  }
+  const arr = mhdmphp;
+  return arr[hitIndex] ?? arr[arr.length - 1] ?? 1;
 }
 
 /**

@@ -15,7 +15,7 @@ import {
   STAGGER_CHARGE_PER_GUARD_HIT,
 } from '../config/constants.js';
 import { STATUS_STAGGERED, getDamageTakenMultiplier } from './StatusSystem.js';
-import { getSkillById, getSkillPower } from '../data/skills.js';
+import { getSkillById, getSkillPower, getMultiHitDamageModifier } from '../data/skills.js';
 
 export class BattleEngine {
   /**
@@ -103,11 +103,13 @@ export class BattleEngine {
       const damageMultiplier = targetHero.staggered
         ? baseMultiplier * getDamageTakenMultiplier(STATUS_STAGGERED)
         : baseMultiplier;
-      const hitDamage = DamageCalculator.calculate(
+      let hitDamage = DamageCalculator.calculate(
         effectiveAtk,
         effectiveDef,
         { ...options, multiplier: damageMultiplier }
       );
+      const hitMod = getMultiHitDamageModifier(i, hits, skill?.mhdmphp);
+      hitDamage = Math.max(0, hitDamage * hitMod);
       const actual = targetHero.takeDamage(hitDamage);
       hitDamages.push(actual);
       totalDamage += actual;
