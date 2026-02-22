@@ -203,6 +203,7 @@ export class SwitchHeroWindow {
 
   _onCaptureKeyDown(event) {
     if (event.keyCode !== 27) return;
+    if (!this.scene.engine.currentTurnHero) return;
     event.preventDefault();
     event.stopPropagation();
     this.hide();
@@ -279,6 +280,7 @@ export class SwitchHeroWindow {
     event.preventDefault();
     event.stopPropagation();
     if (key === 27) {
+      if (!this.scene.engine.currentTurnHero) return;
       this.hide();
       return;
     }
