@@ -134,7 +134,7 @@ export class GameResultScreen {
         .text(
           listLeftX - rowW / 2 + 14,
           y - ROW_H / 2 + 6 + STATS_LINE_HEIGHT,
-          `Attacks: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
+          `Turns: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
           { fontSize: FONT_SIZE_STATS, fontFamily: GAME_FONT, color: STATS_COLOR }
         )
         .setOrigin(0, 0)
@@ -171,7 +171,7 @@ export class GameResultScreen {
         .text(
           listRightX - rowW / 2 + 14,
           y - ROW_H / 2 + 6 + STATS_LINE_HEIGHT,
-          `Attacks: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
+          `Turn: ${hero.timesAttacked}  Dealt: ${fmtNum(hero.damageDealt)}  Taken: ${fmtNum(hero.damageReceived)}`,
           { fontSize: FONT_SIZE_STATS, fontFamily: GAME_FONT, color: STATS_COLOR }
         )
         .setOrigin(0, 0)
