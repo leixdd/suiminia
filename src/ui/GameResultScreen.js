@@ -74,6 +74,8 @@ export class GameResultScreen {
     this._enemyHeader = null;
     this._playerRows = [];
     this._enemyRows = [];
+    this._backBtn = null;
+    this._backZone = null;
   }
 
   /**
@@ -180,6 +182,30 @@ export class GameResultScreen {
       this._enemyRows.push({ bg, nameText, statsText });
     });
 
+    const backY = panelTop + PANEL_H - 44;
+    this._backZone = this.scene.add
+      .rectangle(cx, backY, 140, 32, ROW_FILL, ROW_ALPHA)
+      .setStrokeStyle(2, PANEL_STROKE)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(DEPTH + 2);
+    this._backZone.on('pointerdown', () => {
+      this.hide();
+      this.scene.scene.start('Lobby');
+    });
+    this._backZone.on('pointerover', () => this._backZone.setStrokeStyle(2, 0xf1c40f));
+    this._backZone.on('pointerout', () => this._backZone.setStrokeStyle(2, PANEL_STROKE));
+    this.container.add(this._backZone);
+
+    this._backBtn = this.scene.add
+      .text(cx, backY, 'Back to Lobby', {
+        fontSize: FONT_SIZE_ROW,
+        fontFamily: GAME_FONT,
+        color: TITLE_COLOR,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(DEPTH + 3);
+    this.container.add(this._backBtn);
+
     this.container.setVisible(true);
   }
 
@@ -201,6 +227,14 @@ export class GameResultScreen {
     this._playerHeader = this._enemyHeader = null;
     this._playerRows = [];
     this._enemyRows = [];
+    if (this._backZone) {
+      this._backZone.destroy();
+      this._backZone = null;
+    }
+    if (this._backBtn) {
+      this._backBtn.destroy();
+      this._backBtn = null;
+    }
   }
 
   hide() {
