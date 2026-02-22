@@ -1,6 +1,6 @@
 # Windows & UI Modules
 
-All game windows and major UI components live in **`src/ui/`** (and **`src/entities/HeroUI.js`** for the active-hero display). The BattleScene composes them and passes callbacks or getters.
+All game windows and major UI components live in **`src/ui/`** (and **`src/entities/HeroUI.js`**). BattleScene composes them and passes callbacks or getters.
 
 ---
 
@@ -10,112 +10,134 @@ All game windows and major UI components live in **`src/ui/`** (and **`src/entit
 
 **API**
 
-- **Constructor**: `new PartyPanel(scene, options)`
-  - **options**:  
-    - `getPlayerTeam()`, `getEnemyTeam()` — return current team arrays  
-    - `getPlayerActive()`, `getEnemyActive()` — return current active hero  
-    - `isPendingPlayerSwitch()` — boolean  
-    - `onPlayerSlotClick(index)` — called when the player clicks an alive slot during switch phase
-- **`sync()`** — Updates names, HP bars, active border, and click handlers from current engine state. Call every frame when battle is active.
-- **`playIn()`** — Plays the top-down ease-in animation for all boxes (staggered, one by one). Call once when the battle UI is ready (e.g. delayed after create).
+- **Constructor**: `new PartyPanel(scene, options)` — getPlayerTeam, getEnemyTeam, getPlayerActive, getEnemyActive, isPendingPlayerSwitch, onPlayerSlotClick.
+- **`sync()`** — Updates from engine state. Call every frame when battle is active.
+- **`playIn()`** — Plays ease-in animation. Call once when battle UI is ready.
 
-**Used in**: BattleScene create (instantiate), update (sync), and a delayed call for playIn.
+**Used in**: BattleScene create, update (sync), delayed playIn.
 
 ---
 
 ## 2. CommandBar (`src/ui/CommandBar.js`)
 
-**Purpose**: Bottom bar with feedback text (instructions + subtext) and Attack / Guard / Switch buttons. Shows disabled state when ATB is filling or it’s not the player’s turn.
+**Purpose**: Bottom bar with instructions and **Attack / Skill / Guard / Switch** buttons. Disabled when ATB filling, enemy turn, or when the skill window is open (scene sets instructions to "Choose a skill" and disables all).
 
 **API**
 
-- **Constructor**: `new CommandBar(scene, { onAttack, onGuard, onSwitch })`
-- **`setInstructions(text, subtext?)`** — Sets main line and subtext (e.g. “Your turn”, “A Attack · D Guard · Q Switch”).
-- **`setButtonsVisible(visible)`** — Show or hide the three buttons (e.g. hide when battle over).
-- **`setButtonsEnabled(enabled)`** — When false: buttons dimmed (alpha 0.45) and not clickable; when true: full opacity and interactive. Used while ATB is filling or enemy turn.
+- **Constructor**: `new CommandBar(scene, { onAttack, onGuard, onSwitch, onSkill })`
+- **`setInstructions(text, subtext?)`** — Main line and subtext.
+- **`setButtonsVisible(visible)`** — Show/hide all four buttons.
+- **`setButtonsEnabled(enabled)`** — Dim and non-interactive when false.
+- **`setGuardEnabled(enabled)`** — Guard only (e.g. disabled when staggered).
+- **`setSkillEnabled(enabled)`** — Skill only (e.g. disabled when hero has no skills).
 
-**Used in**: BattleScene create (instantiate with callbacks); update via _updateCommandBar (setInstructions, setButtonsVisible, setButtonsEnabled).
+**Used in**: BattleScene _updateCommandBar; when _skillWindowOpen, all commands disabled.
 
 ---
 
-## 3. SwitchHeroWindow (`src/ui/SwitchHeroWindow.js`)
+## 3. SkillSelectionWindow (`src/ui/SkillSelectionWindow.js`)
 
-**Purpose**: Modal “Choose next hero” window when the player must or chooses to switch. Shows list of heroes with stats panel on the side; supports keyboard (1/2/3, ↑↓, Enter) and mouse.
+**Purpose**: Modal "Choose skill" window. Shows **only the current hero's skills** (max 4). On select, invokes **onSelect(skillId)** and **onHide()**; Esc only calls **onHide()**. When open, the scene disables all commands to avoid spamming.
+
+**API**
+
+- **Constructor**: `new SkillSelectionWindow(scene, { onSelect, onHide? })`
+  - **onSelect(skillId)** — Called when the player picks a skill (scene then runs actAttack with that skillId).
+  - **onHide()** — Called when the window closes (selection or Esc); scene sets _skillWindowOpen = false.
+- **`show(skillIds)`** — **skillIds**: array of skill IDs from hero config (sliced to MAX_SKILLS_PER_HERO). Resolves IDs to skills, shows up to 4 rows with name and "+X dmg, +Y% ATK". Keys 1–4, ↑↓, Enter, Esc.
+- **`hide()`** — Calls onHide(), hides overlay/panel/rows, removes keyboard listener.
+
+**Used in**: BattleScene; on Skill click or S key, scene sets _skillWindowOpen and calls show(currentHeroSkillIds). On select, _onSkillSelected(skillId); onHide clears _skillWindowOpen.
+
+---
+
+## 4. SwitchHeroWindow (`src/ui/SwitchHeroWindow.js`)
+
+**Purpose**: Modal "Choose next hero" when the player must or chooses to switch. Keyboard (1/2/3, ↑↓, Enter) and mouse.
 
 **API**
 
 - **Constructor**: `new SwitchHeroWindow(scene, { getTeam, onSelect })`
-  - **getTeam()** — Returns the player team array (for labels and HP).
-  - **onSelect(index)** — Called when the player confirms a hero (scene then calls engine.selectNextPlayerHero(index) and updates active UI).
-- **`show()`** — Shows overlay, panel, rows, and stats; sets selection to first alive; registers keyboard listener.
-- **`hide()`** — Hides all elements and removes keyboard listener.
-- **`sync()`** — Refreshes row labels/HP and selection highlight from getTeam(). Call every frame while the window is open.
+- **`show()`** / **`hide()`** / **`sync()`** — As before.
 
-**Used in**: BattleScene create (instantiate); update shows and syncs when pendingPlayerSwitch, hides otherwise. Window calls onSelect then hide() on confirm.
+**Used in**: BattleScene when pendingPlayerSwitch; onSelect calls selectNextPlayerHero and updates active UI.
 
 ---
 
-## 4. DebugDamageLog (`src/ui/DebugDamageLog.js`)
+## 5. DebugDamageLog (`src/ui/DebugDamageLog.js`)
 
-**Purpose**: Scrollable “Damage (debug)” panel that logs each attack with formula (ATK, DEF, guard, final damage).
+**Purpose**: Scrollable "Damage (debug)" panel. Each entry is one line: **HeroName: Command (atk - def) [guard ×1.7] [stagger ×2] = damage**. Command is the skill name when a skill was used, otherwise "Attack". Scroll to bottom on new entry; **mouse wheel** and **arrow keys** (↑↓) to scroll.
 
 **API**
 
 - **Constructor**: `new DebugDamageLog(scene)`
-- **`addEntry(result)`** — Appends one damage log entry. **result** should include at least `attacker`, `target`, `atk`, `effectiveDef`, `damage`, optional `guarded`, `baseDef`. Scrolls so the latest entry is in view.
+- **`addEntry(result)`** — **result** must include `attacker`, `atk`, `effectiveDef`, `damage`; optional `guarded`, `targetWasStaggered`, `skill` (for command label). Appends one line and scrolls to bottom.
 
-**Used in**: BattleScene create (instantiate); _onAttackClicked and _executeAI call debugDamageLog.addEntry(result) after actAttack.
+**Used in**: BattleScene after actAttack (player and AI); result includes **skill** when a skill was used.
 
 ---
 
-## 5. VictoryOverlay (`src/ui/VictoryOverlay.js`)
+## 6. GameResultScreen (`src/ui/GameResultScreen.js`)
 
-**Purpose**: Shows the battle result text (“You win!” / “Enemy wins!” / “Draw!”).
+**Purpose**: Full-width result panel with win/lose/draw and per-hero stats (attacks, damage dealt, damage received) for both teams. **Back to Lobby** button starts the Lobby scene.
 
 **API**
 
-- **Constructor**: `new VictoryOverlay(scene)`
-- **`show(winner)`** — **winner**: `'player' | 'enemy' | null`. Sets and shows the corresponding message.
+- **Constructor**: `new GameResultScreen(scene)`
+- **`show(winner, playerTeam, enemyTeam)`** — Shows overlay, title, two columns of hero rows and stats, and Back to Lobby button.
+- **`hide()`** — Clears and hides.
 
-**Used in**: BattleScene create (instantiate); after battle over, a delayed call runs victoryOverlay.show(engine.getVictor()).
+**Used in**: BattleScene after battle over (delayed); Back to Lobby calls `this.scene.scene.start('Lobby')`.
 
 ---
 
-## 6. CommandPop (`src/ui/CommandPop.js`)
+## 7. VictoryOverlay (`src/ui/VictoryOverlay.js`)
 
-**Purpose**: Short-lived “shout” bubble above a hero when they use a command (Attack!, Guard!, Switch!, Pass!). Pop-in and fade-out animation.
+**Purpose**: Legacy win/lose/draw text overlay. Result screen is the main post-battle UI.
 
 **API**
 
-- **`showCommandPop(scene, x, y, label)`** — **x, y**: world position (e.g. hero card center). **label**: e.g. `'Attack!'`, `'Guard!'`, `'Switch!'`, `'Pass!'`. Creates a bubble and text, plays pop-in (Back.easeOut), holds, then fades out and destroys.
-
-**Used in**: BattleScene: _onAttackClicked / _onGuardClicked / _onSwitchClicked (player card); _executeAI (enemy card, label from AI action type).
+- **Constructor**: `new VictoryOverlay(scene)`; **`show(winner)`**
 
 ---
 
-## 7. HeroUI (`src/entities/HeroUI.js`)
+## 8. CommandPop (`src/ui/CommandPop.js`)
 
-**Purpose**: Single active-hero display: name, HP bar, ATB bar. One instance per side (player active, enemy active); the scene rebinds the hero when the active changes.
+**Purpose**: Short-lived bubble above a hero when they use a command (Attack!, Strike!, Guard!, etc.).
 
 **API**
 
-- **Constructor**: `new HeroUI(scene, x, y, hero)` — **hero**: the Hero instance to display.
-- **`setHero(hero)`** — Rebind to another hero (used when switching active).
-- **`sync()`** — Update bars and labels from current hero state. Call every frame.
-- **`setVisible(visible)`** / **`destroy()`** — Standard visibility and cleanup.
+- **`showCommandPop(scene, x, y, label)`** — **label** e.g. `'Attack!'`, `'Strike!'`, `'Guard!'`. Pop-in and fade-out.
 
-**Used in**: BattleScene: playerActiveUI and enemyActiveUI at card positions; setHero when active changes, sync in update.
+**Used in**: BattleScene on player Attack/Skill/Guard/Switch; _executeAI for enemy; skill name used when a skill is selected.
 
 ---
 
-## 8. Summary table
+## 9. HeroUI (`src/entities/HeroUI.js`)
 
-| Module           | Role                         | When shown / used                          |
-|-----------------|------------------------------|--------------------------------------------|
-| PartyPanel      | Team boxes + HP, switch click | Top of screen; sync every frame; playIn once |
-| CommandBar      | Instructions + Attack/Guard/Switch | Bottom; visible when battle not over; enabled only on player turn |
-| SwitchHeroWindow| Choose next hero             | Modal when pendingPlayerSwitch             |
-| DebugDamageLog  | Damage formula log           | Always visible during battle; addEntry on attack |
-| VictoryOverlay  | Win/lose/draw text           | After battle over (delayed)                 |
-| CommandPop      | “Attack!” etc. bubble        | On each command (player or AI)             |
-| HeroUI          | Active hero name/HP/ATB      | One per side; bound to current active      |
+**Purpose**: Active-hero display: name, **HP bar**, **ATB bar**, **Stagger bar**, and **"STAGGERED!"** badge when staggered. One instance per side; scene rebinds hero when active changes.
+
+**API**
+
+- **Constructor**: `new HeroUI(scene, x, y, hero)`
+- **`setHero(hero)`** — Rebind to another hero.
+- **`sync()`** — Update bars and labels from hero state (including stagger, staggered). Call every frame.
+- **`setVisible(visible)`** / **`destroy()`** — Visibility and cleanup.
+
+**Used in**: BattleScene playerActiveUI, enemyActiveUI; setHero on switch, sync in update.
+
+---
+
+## 10. Summary table
+
+| Module              | Role                                  | When shown / used |
+|---------------------|----------------------------------------|--------------------|
+| PartyPanel          | Team boxes + HP, switch click          | Top; sync every frame; playIn once |
+| CommandBar          | Instructions + Attack/Skill/Guard/Switch | Bottom; disabled when skill window open or not player turn |
+| SkillSelectionWindow| Choose skill (max 4 per hero)         | Modal on Skill/S; disables commands until closed |
+| SwitchHeroWindow    | Choose next hero                      | Modal when pendingPlayerSwitch |
+| DebugDamageLog      | Damage log (skill name, guard, stagger) | Scrollable; wheel/arrows; addEntry on attack |
+| GameResultScreen    | Result + per-hero stats + Back to Lobby | After battle over (delayed) |
+| VictoryOverlay      | Win/lose/draw text                    | Legacy |
+| CommandPop          | "Attack!" / "Strike!" etc.            | On each command |
+| HeroUI              | Active hero name, HP, ATB, stagger   | One per side; bound to current active |

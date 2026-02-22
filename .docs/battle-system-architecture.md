@@ -1,14 +1,14 @@
 # Battle System Architecture
 
-This document describes how the battle system is structured: engine, turn queue, teams, switch phase, and how the scene drives it.
+This document describes how the battle system is structured: engine, skills, stagger, turn queue, AI, switch phase, and how the scene drives it.
 
 ---
 
 ## 1. Overview
 
-- **BattleEngine** owns both teams, which hero is active on each side, the **TurnQueue** (built from the two actives only), and victory/switch state.
-- **TurnQueue** only ever contains the two currently active heroes; it is rebuilt when either side switches.
-- The **BattleScene** calls `tick()` every frame, reads `currentTurnHero`, and invokes `actAttack`, `actGuard`, `actPass`, or switch APIs. It also runs the AI when it’s the enemy’s turn.
+- **BattleEngine** owns both teams, active indices, **TurnQueue** (from the two actives only), victory/switch state, and applies damage (basic or skill power), stagger, and status.
+- **TurnQueue** contains only the two currently active heroes; rebuilt when either side switches.
+- **BattleScene** calls `tick()` every frame, reads `currentTurnHero`, and invokes `actAttack` (with optional `skillId`), `actGuard`, `actPass`, or switch APIs. When the **skill selection window** is open, all commands are disabled. When it's the enemy's turn, the scene runs the AI from **battle/ai** with per-hero behavior config.
 
 ---
 
@@ -20,99 +20,68 @@ This document describes how the battle system is structured: engine, turn queue,
 new BattleEngine(playerTeam, enemyTeam)
 ```
 
-- **playerTeam** / **enemyTeam**: arrays of 3 `Hero` instances each.
-- Tracks **playerActiveIndex** and **enemyActiveIndex** (0..2).
-- Creates **TurnQueue** from `[playerTeam[playerActiveIndex], enemyTeam[enemyActiveIndex]]`.
-- **currentTurnHero**: who must choose an action (or `null` while ATB is filling).
-- **victorId**: `'player' | 'enemy' | null` when battle is over.
-- **pendingPlayerSwitch** / **pendingEnemySwitch**: true when the active just died and that side must choose the next hero.
-
-### Active heroes
-
-- **`_getActiveHeroes()`** — Returns `[playerActive, enemyActive]`.
-- **`getPlayerActive()`** / **`getEnemyActive()`** — Current active hero for each side.
-- **`_rebuildTurnQueue()`** — Recreates the turn queue from the two actives (called after a switch).
-
-### Turn flow
-
-- **`tick()`**  
-  - No-op if battle over, in switch phase, or `currentTurnHero !== null`.  
-  - Otherwise: `turnQueue.tick()`, then `currentTurnHero = turnQueue.getCurrentTurn()`.
+- **playerTeam** / **enemyTeam**: arrays of 3 `Hero` instances.
+- Tracks **playerActiveIndex**, **enemyActiveIndex**, **currentTurnHero**, **victorId**, **pendingPlayerSwitch** / **pendingEnemySwitch**.
 
 ### Actions
 
-- **`actAttack(targetHero, options?)`**  
-  - Current turn hero attacks target; applies damage (DamageCalculator), consumes turn, clears `currentTurnHero`.  
-  - If **target** is the active of their side and dies, sets **pendingPlayerSwitch** or **pendingEnemySwitch**.  
-  - If no switch pending, runs `tickUntilReady()` and sets new `currentTurnHero`.  
-  - Runs victory check.  
-  - Returns result object (damage, attacker, target, effectiveDef, etc.).
+- **`actAttack(targetHero, options?)`**
+  - **options.skillId**: if set, resolve skill from `src/data/skills.js`, compute **effectiveAtk** = `getSkillPower(attacker.atk, skill)`, else use `attacker.atk`.
+  - Effective DEF: target guarding → DEF × GUARD_DEF_MULTIPLIER; target staggered → damage multiplier 2×.
+  - Damage via `DamageCalculator.calculate(effectiveAtk, effectiveDef, options)`.
+  - Applies damage, ATB/stagger effects, clears attacker's staggered, consumes turn.
+  - If target was guarding, adds **stagger** to target; if stagger ≥ MAX_STAGGER, target becomes Staggered and guard cleared.
+  - Returns result including **skill** `{ id, name }` when a skill was used (for debug log).
 
-- **`actGuard()`** — Current hero starts guarding, consumes turn, then same “tick until ready” and set `currentTurnHero`.
+- **`actGuard()`** — No-op if current hero is staggered. Otherwise current hero starts guarding, consumes turn, same tick/set currentTurnHero.
 
-- **`actPass()`** — Current hero clears guard, consumes turn, then same “tick until ready” and set `currentTurnHero`.
+- **`actPass()`** — Current hero clears staggered and guard, consumes turn, same tick/set currentTurnHero.
 
-### Voluntary switch
+### Voluntary switch and switch phase
 
-- **`requestVoluntarySwitch()`**  
-  - Allowed only on player’s turn. Consumes that hero’s turn, sets `currentTurnHero = null`, sets **pendingPlayerSwitch = true**.  
-  - Scene then shows the Switch Hero window; when the player picks, it calls `selectNextPlayerHero(index)`.
-
-### Switch phase (after KO or voluntary switch)
-
-- **`selectNextPlayerHero(index)`**  
-  - Valid only when **pendingPlayerSwitch**. Sets **playerActiveIndex**, rebuilds turn queue, clears **pendingPlayerSwitch**, runs `tickUntilReady()`, sets **currentTurnHero**.
-
-- **`selectNextEnemyHeroRandom()`**  
-  - Valid only when **pendingEnemySwitch**. Picks a random alive enemy hero as new active, rebuilds turn queue, clears **pendingEnemySwitch**, runs `tickUntilReady()**, sets **currentTurnHero**.
+- **`requestVoluntarySwitch()`** — Player's turn only; consumes turn, sets pendingPlayerSwitch.
+- **`selectNextPlayerHero(index)`** / **`selectNextEnemyHeroRandom()`** — Resolve switch, rebuild turn queue, clear pending, tick until ready, set currentTurnHero.
 
 ### Victory
 
-- **`isBattleOver()`** — `victorId !== null`.
-- **`getVictor()`** — `'player' | 'enemy' | null`.
-- **`_checkVictory()`** — If one team has no alive heroes, sets **victorId** to the other team (or null if both wiped).
+- **`isBattleOver()`** / **`getVictor()`** / **`_checkVictory()`** — As before.
 
 ---
 
 ## 3. TurnQueue (`src/battle/TurnQueue.js`)
 
-- **Constructor**: accepts an array of heroes (in practice always the two actives).
-- **tick()**: each alive hero gains `spd × CHARGE_PER_TICK` charge, capped at MAX_CHARGE.
-- **getReady()**: heroes with `charge >= MAX_CHARGE`, sorted by charge then SPD.
-- **getCurrentTurn()**: first ready hero or null.
-- **tickUntilReady(maxTicks)**: repeatedly tick until someone is ready (used after an action to advance to the next turn).
-
-The engine is responsible for passing only the two active heroes and rebuilding the queue when actives change.
+Unchanged: two actives, tick(), getCurrentTurn(), tickUntilReady(). Engine rebuilds queue on switch.
 
 ---
 
 ## 4. DamageCalculator (`src/battle/DamageCalculator.js`)
 
-- **calculate(atk, def, options?)**: `max(MIN_DAMAGE, max(0, atk - def) × multiplier)`.
-- **fromHeroToHero(attacker, defender, options?)**: uses defender’s DEF (×1.1 if guarding). Used by the engine inside **actAttack**.
+- **calculate(atk, def, options?)**: `max(MIN_DAMAGE, max(0, atk - def) × multiplier)`. When using a skill, **atk** is the skill power from `getSkillPower(attacker.atk, skill)`.
 
 ---
 
-## 5. Player2AI (`src/battle/Player2AI.js`)
+## 5. AI (`src/battle/ai/`)
 
-- **getAIAction(aiHero, enemies)**  
-  - Returns `{ type: 'attack', targetId }`, `{ type: 'guard' }`, or `{ type: 'pass' }`.  
-  - Uses **GUARD_HP_THRESHOLD** (0.4) to choose Guard when low HP; otherwise attacks first alive enemy.  
-  - The **scene** maps this to `engine.actAttack(target)`, `engine.actGuard()`, or `engine.actPass()`.  
-  - When the enemy active dies, the scene calls **selectNextEnemyHeroRandom()** (not the AI).
+- **getAIAction(aiHero, enemies, options)** (from `ai/index.js`):
+  - **options.behavior**: `'aggressive' | 'defensive' | 'balanced'` (default aggressive).
+  - **options.actionRatio**: `{ attack?, guard? }` for balanced/defensive.
+  - **options.lastAction**: `'attack' | 'guard' | 'pass'` for defensive alternating.
+  - Dispatches to **aggressive.js**, **defensive.js**, or **balanced.js**; returns `{ type, targetId? }`.
+- **Scene**: Stores **enemyTeamConfig** (from Lobby); for current enemy hero gets config by index and passes **behavior**, **actionRatio**, **lastAction** (per-hero **lastEnemyActionByHero**). After AI acts, stores action type for that hero.
 
 ---
 
 ## 6. Scene driving the engine (BattleScene)
 
-- **create**: Builds player/enemy teams, `new BattleEngine(playerTeam, enemyTeam)`, and all UI (party panel, command bar, switch window, etc.).
+- **create**: Builds teams, **playerPartyConfig** (for hero skills), **enemyTeamConfig** (for AI), engine, UI (CommandBar with Attack/Skill/Guard/Switch, **SkillSelectionWindow** with **onHide**), ** _skillWindowOpen** = false.
 - **update** (each frame):
-  1. If **isBattleOver()**: sync UI, schedule victory overlay, return.
-  2. If **pendingEnemySwitch**: schedule delayed **selectNextEnemyHeroRandom()** and **enemyActiveUI.setHero(...)**, return.
-  3. If **pendingPlayerSwitch**: show Switch Hero window, sync party panel, return (no tick).
-  4. Otherwise: **engine.tick()**, sync active hero UIs, **partyPanel.sync()**, **commandBar** (instructions + button enabled state).
-  5. If **currentTurnHero** is enemy: schedule delayed **\_executeAI()** (which calls getAIAction and then actAttack/actGuard/actPass).
-- **Input**: A/D/Q and button clicks only trigger when it’s the player’s turn and not in switch phase; they call **actAttack** / **actGuard** / **requestVoluntarySwitch** (and for Switch, the window’s **onSelect** calls **selectNextPlayerHero**).
+  1. If **isBattleOver()**: sync UI, schedule result screen, return.
+  2. If **pendingEnemySwitch**: schedule selectNextEnemyHeroRandom, return.
+  3. If **pendingPlayerSwitch**: show Switch Hero window, sync, return.
+  4. **engine.tick()**, sync UIs, ** _updateCommandBar()**.
+  5. If ** _skillWindowOpen**: command bar shows "Choose a skill", all buttons disabled; return (no A/S/D/Q).
+  6. If **currentTurnHero** is enemy: schedule ** _executeAI()** (getAIAction with hero config, then actAttack/actGuard/actPass).
+- **Input**: A/S/D/Q and buttons only when player turn, not switch phase, and **not** _skillWindowOpen. **S** or Skill button opens skill window and sets _skillWindowOpen; window **onHide** clears it. ** _onSkillSelected(skillId)** runs actAttack(target, { skillId }), adds log, damage pop.
 
 ---
 
@@ -120,11 +89,11 @@ The engine is responsible for passing only the two active heroes and rebuilding 
 
 ```
 BattleScene (update)
-  → engine.tick()                    // advance ATB, set currentTurnHero
-  → if player turn: accept A/D/Q and buttons
-  → if enemy turn: _executeAI() → getAIAction() → actAttack/actGuard/actPass
+  → if skill window open: disable commands, return
+  → engine.tick()
+  → if player turn: accept A/S/D/Q and buttons (or open skill window)
+  → if skill selected: actAttack(target, { skillId })
+  → if enemy turn: _executeAI() → getAIAction(..., hero config) → actAttack/actGuard/actPass
   → on active KO: pendingPlayerSwitch or pendingEnemySwitch
-  → player: Switch Hero window → selectNextPlayerHero(index)
-  → enemy: selectNextEnemyHeroRandom()
-  → victory when one team has no alive heroes
+  → victory → GameResultScreen, Back to Lobby
 ```

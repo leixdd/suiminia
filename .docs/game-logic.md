@@ -1,6 +1,6 @@
 # Game Logic — Mini Hero Battle
 
-This document describes the core game logic: constants, entities, combat math, turn system, teams, and victory.
+This document describes the core game logic: constants, entities, combat math, stagger/status, skills, turn system, teams, AI, and victory.
 
 ---
 
@@ -11,24 +11,24 @@ This document describes the core game logic: constants, entities, combat math, t
 | `MAX_CHARGE` | 100 | ATB charge (points) needed before a hero can act |
 | `CHARGE_PER_TICK` | 1 | Charge gain per tick: `charge += SPD × CHARGE_PER_TICK` |
 | `MIN_DAMAGE` | 0 | Minimum damage any attack can deal |
-| `GUARD_DEF_MULTIPLIER` | 1.1 | When guarding, defender's DEF is multiplied by this (+10% DEF) |
+| `GUARD_DEF_MULTIPLIER` | 1.7 | When guarding, defender's DEF is multiplied by this |
 | `GUARD_ATB_DRAWBACK_WHEN_HIT` | 0.05 | When attacked while guarding, defender loses an extra 5% of the ATB bar |
-| `GUARD_ATB_DRAWBACK_WHEN_NOT_HIT` | 0.1 | When guarding and not attacked (end turn with Guard), hero's ATB set to -10% |
-| `TEAM_SIZE` | 3 | Heroes per team (Pokémon-style) |
-| `ATB_DAMAGE_DRAWBACK` | 0.25 | When a hero receives damage, their ATB bar is reduced by this ratio (25% of the bar) |
-| `ATTACKER_ATB_DRAWBACK` | 0.25 | When a hero attacks, their ATB is set to this negative ratio of the bar (must fill from -25% to 100%) |
-| `GAME_WIDTH` | 800 | Canvas width |
-| `GAME_HEIGHT` | 600 | Canvas height |
-| `BATTLE_PADDING` | 100 | Horizontal padding for hero card areas |
-| `CARD_WIDTH` / `CARD_HEIGHT` | 120 / 160 | Placeholder card size |
-| `HERO_BAR_WIDTH` | 120 | HP/ATB bar width |
+| `GUARD_ATB_DRAWBACK_WHEN_NOT_HIT` | 0.1 | When guarding and not attacked, hero's ATB set to -10% |
+| `MAX_STAGGER` | 100 | Stagger meter capacity; when full, hero becomes Staggered |
+| `STAGGER_CHARGE_PER_GUARD_HIT` | 34 | Stagger charge added when hit while guarding (per hit) |
+| `STAGGERED_DAMAGE_MULTIPLIER` | 2 | Damage multiplier when target is Staggered (200%) |
+| `TEAM_SIZE` | 3 | Heroes per team |
+| `ATB_DAMAGE_DRAWBACK` | 0.001 | When a hero receives damage, ATB reduced by this ratio |
+| `ATTACKER_ATB_DRAWBACK` | 0.25 | When a hero attacks, ATB set to -25% of bar |
+| `GAME_WIDTH` / `GAME_HEIGHT` | 800 / 600 | Canvas size |
+| `BATTLE_PADDING`, `CARD_*`, `HERO_BAR_WIDTH` | — | Layout and bar dimensions |
 | `GAME_FONT` | "Press Start 2P" | Default font |
 
 ---
 
 ## 2. Hero Entity (`src/entities/Hero.js`)
 
-Single combat unit: stats, HP, ATB charge, and guard state.
+Single combat unit: stats, HP, ATB charge, guard state, and stagger.
 
 ### Constructor options
 
@@ -46,7 +46,9 @@ Single combat unit: stats, HP, ATB charge, and guard state.
 
 - **charge** (0..MAX_CHARGE): ATB progress; at MAX_CHARGE the hero can act.
 - **alive**: `currentHp > 0`.
-- **guarding**: When true, incoming damage uses DEF × GUARD_DEF_MULTIPLIER until the hero’s next action.
+- **guarding**: When true, incoming damage uses DEF × GUARD_DEF_MULTIPLIER until the hero's next action. **Disabled while staggered.**
+- **stagger** (0..MAX_STAGGER): Stagger meter; fills when hit while guarding.
+- **staggered**: When true, hero takes STAGGERED_DAMAGE_MULTIPLIER (200%) damage and cannot guard until they act.
 
 ### Methods
 
@@ -54,8 +56,11 @@ Single combat unit: stats, HP, ATB charge, and guard state.
 |--------|-------------|
 | `isReady()` | `alive && charge >= MAX_CHARGE` |
 | `consumeTurn()` | Sets `charge = 0` (after acting) |
-| `startGuarding()` | Sets `guarding = true` (DEF × GUARD_DEF_MULTIPLIER) |
+| `startGuarding()` | Sets `guarding = true` (cannot use when staggered) |
 | `clearGuarding()` | Sets `guarding = false` |
+| `addStagger(amount)` | Adds to stagger; if ≥ MAX_STAGGER, sets staggered and clears guard |
+| `clearStaggered()` | Clears staggered (e.g. when hero acts) |
+| `staggerProgress()` | Returns stagger as 0..1 for UI |
 | `takeDamage(amount)` | Applies damage, updates `currentHp` and `alive` |
 | `heal(amount)` | Increases `currentHp` up to `maxHp` |
 | `chargeProgress()` | Returns charge as 0..1 for UI |
@@ -64,9 +69,7 @@ Single combat unit: stats, HP, ATB charge, and guard state.
 
 ## 3. Damage (`src/battle/DamageCalculator.js`)
 
-Single formula for all damage.
-
-### Formula
+### Basic formula
 
 ```
 raw   = max(0, ATK - DEF)
@@ -74,87 +77,92 @@ base  = max(MIN_DAMAGE, raw)
 final = max(MIN_DAMAGE, base × multiplier)
 ```
 
-With guard: defender uses **DEF × GUARD_DEF_MULTIPLIER** (e.g. 1.1 = +10%) instead of DEF.
+With guard: defender uses **DEF × GUARD_DEF_MULTIPLIER** (1.7).  
+With **Staggered** target: `multiplier` includes **STAGGERED_DAMAGE_MULTIPLIER** (2).
 
-### ATB damage drawback (defender)
+### Skill damage (`src/data/skills.js`)
 
-When a hero **receives** damage, their ATB charge is reduced by **25% of the bar** (configurable via `ATB_DAMAGE_DRAWBACK`). So: `charge = max(0, charge - MAX_CHARGE × ATB_DAMAGE_DRAWBACK)`. This only affects the ATB bar, not HP or other stats.
+Skill **power** (effective ATK before DEF):
 
-### ATB drawback (attacker)
+```
+power = (ATK + SkillDamage) + (ATK × damageMultiplier)
+```
 
-When a hero **attacks**, their ATB is set to a **negative** value: `charge = -MAX_CHARGE × ATTACKER_ATB_DRAWBACK` (e.g. -25% of the bar). They must then fill from that value back up to MAX_CHARGE before acting again. Guard and Pass use their own drawbacks below.
+Then `DamageCalculator.calculate(power, effectiveDef, options)` gives final damage. Each skill has `skillDamage` (flat) and `damageMultiplier` (e.g. 0.2 = +20% ATK). Heroes have up to **MAX_SKILLS_PER_HERO** (4) skills in config.
 
-### ATB drawback (guard)
+### ATB / guard drawbacks
 
-- **When attacked while guarding**: The defender loses an extra **5%** of the bar (`GUARD_ATB_DRAWBACK_WHEN_HIT`), applied after the normal damage ATB drawback.
-- **When guarding and not attacked**: When a hero uses Guard and ends their turn (without being hit before their next turn), their ATB is set to **-10%** (`GUARD_ATB_DRAWBACK_WHEN_NOT_HIT`), so they must fill from -10% to 100% before acting again.
-
-### API
-
-- **`DamageCalculator.calculate(atk, def, options?)`**  
-  - `options.multiplier`: optional (default 1).  
-  - Returns final damage (≥ MIN_DAMAGE).
-
-- **`DamageCalculator.fromHeroToHero(attacker, defender, options?)`**  
-  - Uses attacker ATK and defender effective DEF (×1.1 if guarding).
+- **Defender hit**: ATB reduced by `ATB_DAMAGE_DRAWBACK`; if guarding, extra `GUARD_ATB_DRAWBACK_WHEN_HIT` and **stagger charge**.
+- **Attacker**: After attacking, ATB set to `-ATTACKER_ATB_DRAWBACK` of bar.
+- **Guard (not hit)**: After acting with Guard, ATB set to `-GUARD_ATB_DRAWBACK_WHEN_NOT_HIT`.
 
 ---
 
-## 4. Turn Queue — ATB (`src/battle/TurnQueue.js`)
+## 4. Status system (`src/battle/StatusSystem.js`)
 
-Turn order by ATB: charge fills over time; whoever reaches MAX_CHARGE first acts.
+- **STATUS_STAGGERED**: Hero takes increased damage (see `getDamageTakenMultiplier('staggered')` = 2). Cleared when the hero acts (attack, guard, pass, switch).
 
-- **`new TurnQueue(heroes)`** — `heroes`: array of **active** heroes only (e.g. two: player active, enemy active).
-- **`tick()`** — For each alive hero: `charge = min(MAX_CHARGE, charge + spd × CHARGE_PER_TICK)`.
-- **`getReady()`** — Heroes with `isReady()`, sorted by charge (desc), then SPD (desc).
+---
+
+## 5. Stagger
+
+- **Charge**: When a hero is **hit while guarding**, they gain **STAGGER_CHARGE_PER_GUARD_HIT** stagger. When stagger ≥ MAX_STAGGER, they become **Staggered** and the meter resets; guard is cleared.
+- **Effect**: Staggered hero takes **200%** damage and **cannot guard** (Guard button disabled, actGuard no-op, AI does not choose Guard).
+- **Clear**: When the hero takes any action (attack, skill, guard, pass, switch), `clearStaggered()` is called.
+
+---
+
+## 6. Turn Queue — ATB (`src/battle/TurnQueue.js`)
+
+- **`new TurnQueue(heroes)`** — `heroes`: active heroes only (player active, enemy active).
+- **`tick()`** — Each alive hero gains charge; capped at MAX_CHARGE.
 - **`getCurrentTurn()`** — First ready hero, or `null`.
-- **`tickUntilReady(maxTicks?)`** — Repeatedly `tick()` until someone is ready (or max ticks).
+- **`tickUntilReady(maxTicks?)`** — Tick until someone is ready.
 
 ---
 
-## 5. Teams and active hero
+## 7. Teams and active hero
 
-- Each side has **TEAM_SIZE** (3) heroes.
-- Only **one hero per side** is “active” at a time; only actives are in the turn queue and can be targeted.
-- When the **active** hero dies, that side enters a **switch phase**: they must choose the next active (player via UI, AI at random).
-- **Voluntary switch**: On the player’s turn they can choose “Switch” (uses the turn); they then pick the next active from the same team.
+- Each side has **TEAM_SIZE** (3) heroes. **One active per side**; only actives are in the turn queue and can be targeted.
+- When the **active** dies, that side enters **switch phase** (player via UI, AI at random).
+- **Voluntary switch**: Player can choose "Switch" (uses the turn) and pick the next active.
 
 ---
 
-## 6. Victory and battle end
+## 8. Victory and battle end
 
 - Battle ends when **one team has no alive heroes**.
-- **Victor**: `'player'` or `'enemy'`; if both wiped, treat as draw (`null`).
+- **Victor**: `'player'` or `'enemy'`; result screen shows per-hero stats and **Back to Lobby**.
 
 ---
 
-## 7. AI (`src/battle/Player2AI.js`)
+## 9. AI (`src/battle/ai/`)
 
-- **`getAIAction(aiHero, enemies)`**  
-  - Returns `{ type: 'attack', targetId }`, `{ type: 'guard' }`, or `{ type: 'pass' }`.
-  - If AI HP ratio ≤ **GUARD_HP_THRESHOLD** (0.4), prefers Guard.
-  - Otherwise attacks first alive enemy.
-  - When the enemy active dies, the **scene** calls `engine.selectNextEnemyHeroRandom()` to pick the next active at random.
+- **`getAIAction(aiHero, enemies, options)`** (from `ai/index.js`) dispatches by **options.behavior** (and uses **options.actionRatio**, **options.lastAction** where needed).
+- **Behaviors**:
+  - **aggressive**: Always attack.
+  - **defensive**: 80–100% HP: alternate guard/attack; &lt;80%: 60% guard (or actionRatio); ≤30%: 100% guard; when staggered, attack.
+  - **balanced**: Pick attack or guard by **actionRatio** (default 50/50); when staggered, attack.
+- **Per-hero config**: In enemy team data, each hero can have `behavior` and `actionRatio: { attack?, guard? }`. Scene passes current enemy hero's config and **lastAction** (for defensive alternating).
 
 ---
 
-## 8. Player input
+## 10. Player input
 
-- **Commands** (when it’s the player’s turn and not in switch phase):
-  - **A** → Attack  
-  - **D** → Guard  
+- **Commands** (player's turn, not in switch phase, skill window closed):
+  - **A** → Attack (basic)
+  - **S** → Skill (opens skill selection; choose one to attack with that skill)
+  - **D** → Guard (disabled when staggered)
   - **Q** → Switch (voluntary)
-- Buttons (Attack / Guard / Switch) mirror these; they are **disabled** (dimmed, not clickable) when ATB is filling or it’s the enemy’s turn.
-- During **switch phase** (after KO or voluntary Switch), the player picks the next hero via the Switch Hero window (1/2/3, arrows+Enter, or click).
+- **Skill window open**: All command buttons and A/S/D/Q are disabled; only skill window keys (1–4, ↑↓, Enter, Esc) work.
+- Buttons (Attack / Skill / Guard / Switch) mirror keys; disabled when ATB filling, enemy turn, or no skills (Skill).
+- **Switch phase**: Player picks next hero via Switch Hero window (1/2/3, arrows+Enter, or click).
 
 ---
 
-## 9. Scene flow (summary)
+## 11. Scene flow (summary)
 
-- **Boot** → **Preload** → **Battle**.
-- Battle: two teams of 3 heroes, engine with `playerTeam` / `enemyTeam`, active indices, turn queue from actives only.
-- Each frame: if not over and not in switch phase, `engine.tick()`; sync UI; if player turn, accept A/D/Q and button clicks; if enemy turn, run AI after a short delay.
-- When active dies: set `pendingPlayerSwitch` or `pendingEnemySwitch`; scene shows switch UI or calls `selectNextEnemyHeroRandom()`; after switch, battle continues.
-- Victory: when one team has no alive heroes, show victory overlay (“You win!” / “Enemy wins!” / “Draw!”).
-
-This is the game logic as implemented in the codebase.
+- **Boot** → **Preload** → **Title** → **Lobby** → **Battle**.
+- Battle: two teams, engine with actAttack (optional skillId), actGuard, actPass, switch; stagger and status applied in engine.
+- Each frame: tick, sync UI, update command bar (disable all when skill window open); if player turn and not skill window, accept A/S/D/Q and buttons; if enemy turn, run AI.
+- Victory: result screen with **Back to Lobby**.
