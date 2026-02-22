@@ -27,6 +27,13 @@ export const GUARD_ATB_DRAWBACK_WHEN_HIT = 0.05;
 /** ATB drawback when guarding and not attacked (end turn with Guard): hero's ATB set to this negative ratio (e.g. 0.1 = -10%). */
 export const GUARD_ATB_DRAWBACK_WHEN_NOT_HIT = 0.1;
 
+/** Stagger: meter capacity (same scale as ATB for UI). When full, hero becomes Staggered (takes 200% damage). */
+export const MAX_STAGGER = 100;
+/** Stagger charge added when the hero is hit while guarding (per hit). */
+export const STAGGER_CHARGE_PER_GUARD_HIT = 34;
+/** Damage multiplier when target is Staggered (2 = 200% damage). */
+export const STAGGERED_DAMAGE_MULTIPLIER = 2;
+
 /** Default game dimensions (Phaser config) */
 export const GAME_WIDTH = 800;
 export const GAME_HEIGHT = 600;

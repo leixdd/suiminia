@@ -12,7 +12,9 @@ import {
   GUARD_DEF_MULTIPLIER,
   GUARD_ATB_DRAWBACK_WHEN_HIT,
   GUARD_ATB_DRAWBACK_WHEN_NOT_HIT,
+  STAGGER_CHARGE_PER_GUARD_HIT,
 } from '../config/constants.js';
+import { STATUS_STAGGERED, getDamageTakenMultiplier } from './StatusSystem.js';
 
 export class BattleEngine {
   /**
@@ -85,19 +87,27 @@ export class BattleEngine {
       : targetHero.def;
     // Only the attacker leaves guard when they act; target stays guarding until their next action (while ATB fills).
     this.currentTurnHero.clearGuarding();
+    // Staggered status: target takes increased damage (200%)
+    const baseMultiplier = options.multiplier ?? 1;
+    const damageMultiplier = targetHero.staggered
+      ? baseMultiplier * getDamageTakenMultiplier(STATUS_STAGGERED)
+      : baseMultiplier;
     const damage = DamageCalculator.calculate(
       this.currentTurnHero.atk,
       effectiveDef,
-      options
+      { ...options, multiplier: damageMultiplier }
     );
     targetHero.takeDamage(damage);
     // Drawback: taking damage reduces ATB
     const drawback = MAX_CHARGE * ATB_DAMAGE_DRAWBACK;
     targetHero.charge = Math.max(0, targetHero.charge - drawback);
-    // Guard drawback: when attacked while guarding, extra ATB penalty. Do not clear targetHero.guarding—they stay guarding while ATB fills until their next action.
+    // Guard: when attacked while guarding, extra ATB penalty and stagger charge
     if (targetHero.guarding) {
       targetHero.charge = Math.max(0, targetHero.charge - MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_HIT);
+      targetHero.addStagger(STAGGER_CHARGE_PER_GUARD_HIT);
     }
+    // Attacker clears their own staggered status when they act
+    this.currentTurnHero.clearStaggered();
     this.currentTurnHero.consumeTurn();
     const previousTurn = this.currentTurnHero;
     // Attacker drawback: their ATB is set to a negative value so they must fill more before acting again
@@ -138,11 +148,13 @@ export class BattleEngine {
       baseDef,
       effectiveDef,
       guarded: targetHero.guarding,
+      targetWasStaggered: targetHero.staggered,
     };
   }
 
   actGuard() {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) return;
+    this.currentTurnHero.clearStaggered();
     this.currentTurnHero.startGuarding();
     this.currentTurnHero.consumeTurn();
     // Guard persists until this hero's next action (Attack/Pass/Switch). ATB set negative so they fill before next turn.
@@ -154,6 +166,7 @@ export class BattleEngine {
 
   actPass() {
     if (this.currentTurnHero === null) return;
+    this.currentTurnHero.clearStaggered();
     this.currentTurnHero.clearGuarding();
     this.currentTurnHero.consumeTurn();
     this.currentTurnHero = null;
@@ -168,6 +181,7 @@ export class BattleEngine {
   requestVoluntarySwitch() {
     if (this.victorId !== null) return false;
     if (this.currentTurnHero === null || !this.playerTeam.includes(this.currentTurnHero)) return false;
+    this.currentTurnHero.clearStaggered();
     this.currentTurnHero.clearGuarding();
     this.currentTurnHero.consumeTurn();
     this.currentTurnHero = null;

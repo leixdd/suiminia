@@ -2,7 +2,7 @@
  * Hero entity: stats (ATK, DEF, SPD) and ATB charge state.
  * Used by the BattleEngine for turn order and by DamageCalculator for combat math.
  */
-import { MAX_CHARGE } from '../config/constants.js';
+import { MAX_CHARGE, MAX_STAGGER } from '../config/constants.js';
 
 export class Hero {
   /**
@@ -31,6 +31,11 @@ export class Hero {
     /** When true, incoming damage uses +10% DEF. Persists until this hero's next action (Attack/Pass/Switch)—i.e. stays true while ATB is filling. */
     this.guarding = false;
 
+    /** Stagger meter 0..MAX_STAGGER. Fills when hit while guarding; when full, hero becomes staggered and meter resets. */
+    this.stagger = 0;
+    /** When true, this hero is Staggered and takes STAGGERED_DAMAGE_MULTIPLIER (200%) damage. Cleared when hero acts. */
+    this.staggered = false;
+
     /** Battle stats (reset per battle, updated by BattleEngine) */
     this.timesAttacked = 0;
     this.damageDealt = 0;
@@ -45,6 +50,28 @@ export class Hero {
   /** Clear guard state (e.g. when attacking or passing) */
   clearGuarding() {
     this.guarding = false;
+  }
+
+  /**
+   * Add stagger charge (e.g. when hit while guarding). If meter reaches MAX_STAGGER, hero becomes staggered and meter resets.
+   * @param {number} amount
+   */
+  addStagger(amount) {
+    this.stagger = Math.min(MAX_STAGGER, this.stagger + amount);
+    if (this.stagger >= MAX_STAGGER) {
+      this.staggered = true;
+      this.stagger = 0;
+    }
+  }
+
+  /** Clear staggered status (e.g. when hero takes an action). */
+  clearStaggered() {
+    this.staggered = false;
+  }
+
+  /** Stagger progress 0..1 for UI bar */
+  staggerProgress() {
+    return Math.max(0, Math.min(1, this.stagger / MAX_STAGGER));
   }
 
   /** Returns true when charge is full and hero can take a turn */

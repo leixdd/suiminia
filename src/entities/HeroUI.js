@@ -9,6 +9,7 @@ import {
   HERO_UI_FONT_SIZE_BAR,
   HERO_UI_FONT_SIZE_NAME,
   MAX_CHARGE,
+  MAX_STAGGER,
   HERO_BAR_WIDTH,
 } from '../config/constants.js';
 
@@ -64,6 +65,7 @@ export class HeroUI {
     const hpBarY = CARD_HEIGHT / 2 + 20;
     const hpRowHeight = 26;
     const atbBarY = hpBarY + hpRowHeight;
+    const staggerBarY = atbBarY + hpRowHeight;
 
     const barWidth = HERO_BAR_WIDTH;
     const barHeight = 12;
@@ -143,6 +145,40 @@ export class HeroUI {
     this._atbBarHeight = barHeight;
     this._displayCharge = 0;
     this._previousCharge = -1;
+
+    // --- Stagger bar (fills when hit while guarding; when full → Staggered) ---
+    const staggerFillColor = 0xe67e22; // orange
+    const staggerFullColor = 0xe74c3c; // red when near full / staggered
+    this.staggerLabel = scene.add
+      .text(barLeftX - padding, staggerBarY, 'Stagger', { fontSize: HERO_UI_FONT_SIZE_BAR, fontFamily: HERO_UI_FONT, color: '#b0b0b0' })
+      .setOrigin(1, 0.5);
+    this.staggerBg = scene.add
+      .rectangle(barLeftX, staggerBarY, barWidth, barHeight, 0x333333, 0.9)
+      .setOrigin(0, 0.5);
+    this.staggerFill = scene.add
+      .rectangle(barLeftX, staggerBarY, barWidth * hero.staggerProgress(), barHeight, staggerFillColor, 1)
+      .setOrigin(0, 0.5);
+    this.staggerValueText = scene.add
+      .text(barLeftX + padding, staggerBarY - 4, '0%', {
+        fontSize: HERO_UI_FONT_SIZE_BAR,
+        fontFamily: HERO_UI_FONT,
+        color: '#e0e0e0',
+        stroke: '#000000',
+        strokeThickness: 1,
+      })
+      .setOrigin(0, 0);
+    this.staggeredBadge = scene.add
+      .text(0, staggerBarY, 'STAGGERED!', {
+        fontSize: 7,
+        fontFamily: HERO_UI_FONT,
+        color: '#e74c3c',
+      })
+      .setOrigin(0.5, 0.5)
+      .setVisible(hero.staggered);
+    this.container.add([this.staggerLabel, this.staggerBg, this.staggerFill, this.staggerValueText, this.staggeredBadge]);
+    this._staggerBarWidth = barWidth;
+    this._staggerBarHeight = barHeight;
+    this._displayStagger = hero.staggerProgress();
   }
 
   /**
@@ -190,6 +226,23 @@ export class HeroUI {
     this.atbValueText
       .setText(`${pct}%`)
       .setVisible(hero.alive);
+
+    // --- Stagger bar ---
+    const targetStaggerProgress = hero.staggerProgress();
+    this._displayStagger += (targetStaggerProgress - this._displayStagger) * ATB_FILL_LERP;
+    this._displayStagger = Math.max(0, Math.min(1, this._displayStagger));
+    this.staggerFill.width = this._staggerBarWidth * this._displayStagger;
+    this.staggerFill.height = this._staggerBarHeight;
+    this.staggerFill.setOrigin(0, 0.5);
+    this.staggerFill.setFillStyle(hero.staggered ? 0xe74c3c : (this._displayStagger >= 0.9 ? 0xe74c3c : 0xe67e22), 1);
+    this.staggerFill.setVisible(hero.alive);
+    this.staggerBg.setVisible(hero.alive);
+    this.staggerLabel.setVisible(hero.alive);
+    const staggerPct = Math.round((hero.stagger / MAX_STAGGER) * 100);
+    this.staggerValueText
+      .setText(hero.staggered ? '!' : `${staggerPct}%`)
+      .setVisible(hero.alive);
+    this.staggeredBadge.setVisible(hero.alive && hero.staggered);
   }
 
   /** Rebind to a different hero (e.g. when switching active in team battle) */

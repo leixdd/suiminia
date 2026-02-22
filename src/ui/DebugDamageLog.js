@@ -92,7 +92,8 @@ export class DebugDamageLog {
     const baseDef = result.baseDef ?? result.effectiveDef;
     const guardPct = Math.round((GUARD_DEF_MULTIPLIER - 1) * 100);
     const guardStr = result.guarded ? ` (guard +${guardPct}% DEF)` : '';
-    const summaryLine = `${result.attacker.name} ${result.atk} ATK vs ${result.target.name} ${fmtNum(result.effectiveDef)} DEF${guardStr} → ${fmtNum(result.damage)} dmg`;
+    const staggerStr = result.targetWasStaggered ? ' [STAGGERED 2×]' : '';
+    const summaryLine = `${result.attacker.name} ${result.atk} ATK vs ${result.target.name} ${fmtNum(result.effectiveDef)} DEF${guardStr}${staggerStr} → ${fmtNum(result.damage)} dmg`;
     let formulaLine;
     if (result.guarded) {
       formulaLine = `  effective_def = ${baseDef} × ${GUARD_DEF_MULTIPLIER} = ${fmtNum(result.effectiveDef)}; dmg = ${fmtNum(result.damage)}`;
