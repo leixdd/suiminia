@@ -298,6 +298,20 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  /** Show damage pop(s). If result.hitDamages has multiple values, show one pop per hit with staggered delay. */
+  _showDamagePops(x, y, result) {
+    if (result.damage <= 0) return;
+    const hits = result.hitDamages;
+    if (hits?.length > 1) {
+      const delayMs = 180;
+      hits.forEach((amount, i) => {
+        this.time.delayedCall(i * delayMs, () => this._showDamagePop(x, y, amount));
+      });
+    } else {
+      this._showDamagePop(x, y, result.damage);
+    }
+  }
+
   /** Get AI config for an enemy hero (behavior, actionRatio) by slot index. */
   _getEnemyHeroConfig(hero) {
     if (!this.enemyTeamConfig?.heroes) return null;
@@ -339,9 +353,7 @@ export class BattleScene extends Phaser.Scene {
     }
     const result = this.engine.actAttack(target);
     this.debugDamageLog.addEntry(result);
-    if (result.damage > 0) {
-      this._showDamagePop(this.playerCard.x, this.playerCard.y, result.damage);
-    }
+    this._showDamagePops(this.playerCard.x, this.playerCard.y, result);
   }
 
   _onGuardClicked() {
@@ -367,9 +379,7 @@ export class BattleScene extends Phaser.Scene {
     showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Attack!');
     const result = this.engine.actAttack(target);
     this.debugDamageLog.addEntry(result);
-    if (result.damage > 0) {
-      this._showDamagePop(this.enemyCard.x, this.enemyCard.y, result.damage);
-    }
+    this._showDamagePops(this.enemyCard.x, this.enemyCard.y, result);
   }
 
   _getCurrentPlayerSkillIds() {
@@ -397,8 +407,6 @@ export class BattleScene extends Phaser.Scene {
     showCommandPop(this, this.playerCard.x, this.playerCard.y, label);
     const result = this.engine.actAttack(target, { skillId });
     this.debugDamageLog.addEntry(result);
-    if (result.damage > 0) {
-      this._showDamagePop(this.enemyCard.x, this.enemyCard.y, result.damage);
-    }
+    this._showDamagePops(this.enemyCard.x, this.enemyCard.y, result);
   }
 }

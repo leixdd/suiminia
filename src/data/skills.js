@@ -14,6 +14,7 @@
  * @property {string} [description] - Optional flavour text
  * @property {number} skillDamage - Flat damage added to ATK
  * @property {number} damageMultiplier - Extra ATK scaling (e.g. 0.2 = +20% of ATK)
+ * @property {number} [hits] - Number of hits (default 1). The attack runs this many times in a loop (full damage each hit); stagger/ATB apply per hit when guarding.
  */
 
 /** Maximum number of skills a hero can have. */
@@ -27,6 +28,7 @@ export const SKILLS = [
     description: 'A straightforward physical blow.',
     skillDamage: 2,
     damageMultiplier: 0,
+    hits: 1,
   },
   {
     id: 'slash',
@@ -34,6 +36,7 @@ export const SKILLS = [
     description: 'A quick cutting attack.',
     skillDamage: 5,
     damageMultiplier: 0,
+    hits: 1,
   },
   {
     id: 'heavy_swing',
@@ -41,6 +44,7 @@ export const SKILLS = [
     description: 'A slow, powerful strike.',
     skillDamage: 15,
     damageMultiplier: 0,
+    hits: 1,
   },
   {
     id: 'power_strike',
@@ -48,6 +52,7 @@ export const SKILLS = [
     description: 'Channels strength into a single hit.',
     skillDamage: 0,
     damageMultiplier: 0,
+    hits: 1,
   },
   {
     id: 'crush',
@@ -55,6 +60,7 @@ export const SKILLS = [
     description: 'Overwhelming physical impact.',
     skillDamage: 10,
     damageMultiplier: 0,
+    hits: 1,
   },
   {
     id: 'barrage',
@@ -62,6 +68,7 @@ export const SKILLS = [
     description: 'A flurry of physical strikes.',
     skillDamage: 3,
     damageMultiplier: 0,
+    hits: 3,
   },
 ];
 

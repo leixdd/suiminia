@@ -143,7 +143,8 @@ export class SkillSelectionWindow {
       row.zone.setVisible(visible);
       if (skill) {
         row.nameText.setText(skill.name);
-        row.formulaText.setText(`+${skill.skillDamage} dmg, +${fmtNum((skill.damageMultiplier ?? 0) * 100)}% ATK`);
+        const hitsStr = (skill.hits ?? 1) > 1 ? ` · ${skill.hits} hits` : '';
+        row.formulaText.setText(`+${skill.skillDamage} dmg, +${fmtNum((skill.damageMultiplier ?? 0) * 100)}% ATK${hitsStr}`);
         row.zone.removeAllListeners();
         row.zone.on('pointerdown', () => this._confirm(row.index));
         row.zone.on('pointerover', () => { this.selectedIndex = row.index; });

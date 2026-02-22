@@ -83,9 +83,6 @@ export class BattleEngine {
       return { damage: 0, targetAlive: false };
     }
 
-    const effectiveDef = targetHero.guarding
-      ? targetHero.def * GUARD_DEF_MULTIPLIER
-      : targetHero.def;
     // Only the attacker leaves guard when they act; target stays guarding until their next action (while ATB fills).
     this.currentTurnHero.clearGuarding();
     // Skill: use skill power (Attack + SkillDamage) + (Attack × multiplier) as effective ATK; otherwise use raw ATK
@@ -93,25 +90,34 @@ export class BattleEngine {
     const effectiveAtk = skill
       ? getSkillPower(this.currentTurnHero.atk, skill)
       : this.currentTurnHero.atk;
-    // Staggered status: target takes increased damage (200%)
+    const hits = skill?.hits ?? 1;
     const baseMultiplier = options.multiplier ?? 1;
-    const damageMultiplier = targetHero.staggered
-      ? baseMultiplier * getDamageTakenMultiplier(STATUS_STAGGERED)
-      : baseMultiplier;
-    const damage = DamageCalculator.calculate(
-      effectiveAtk,
-      effectiveDef,
-      { ...options, multiplier: damageMultiplier }
-    );
-    targetHero.takeDamage(damage);
-    // Drawback: taking damage reduces ATB
     const drawback = MAX_CHARGE * ATB_DAMAGE_DRAWBACK;
-    targetHero.charge = Math.max(0, targetHero.charge - drawback);
-    // Guard: when attacked while guarding, extra ATB penalty and stagger charge
-    if (targetHero.guarding) {
-      targetHero.charge = Math.max(0, targetHero.charge - MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_HIT);
-      targetHero.addStagger(STAGGER_CHARGE_PER_GUARD_HIT);
+    let totalDamage = 0;
+    /** @type {number[]} */
+    const hitDamages = [];
+    for (let i = 0; i < hits && targetHero.alive; i++) {
+      const effectiveDef = targetHero.guarding
+        ? targetHero.def * GUARD_DEF_MULTIPLIER
+        : targetHero.def;
+      const damageMultiplier = targetHero.staggered
+        ? baseMultiplier * getDamageTakenMultiplier(STATUS_STAGGERED)
+        : baseMultiplier;
+      const hitDamage = DamageCalculator.calculate(
+        effectiveAtk,
+        effectiveDef,
+        { ...options, multiplier: damageMultiplier }
+      );
+      const actual = targetHero.takeDamage(hitDamage);
+      hitDamages.push(actual);
+      totalDamage += actual;
+      targetHero.charge = Math.max(0, targetHero.charge - drawback);
+      if (targetHero.guarding) {
+        targetHero.charge = Math.max(0, targetHero.charge - MAX_CHARGE * GUARD_ATB_DRAWBACK_WHEN_HIT);
+        targetHero.addStagger(STAGGER_CHARGE_PER_GUARD_HIT);
+      }
     }
+    const damage = totalDamage;
     // Attacker clears their own staggered status when they act
     this.currentTurnHero.clearStaggered();
     this.currentTurnHero.consumeTurn();
@@ -142,6 +148,9 @@ export class BattleEngine {
     this._checkVictory();
 
     const baseDef = targetHero.def;
+    const effectiveDef = targetHero.guarding
+      ? targetHero.def * GUARD_DEF_MULTIPLIER
+      : targetHero.def;
     previousTurn.timesAttacked += 1;
     previousTurn.damageDealt += damage;
     targetHero.damageReceived += damage;
@@ -155,7 +164,8 @@ export class BattleEngine {
       effectiveDef,
       guarded: targetHero.guarding,
       targetWasStaggered: targetHero.staggered,
-      skill: skill ? { id: skill.id, name: skill.name } : null,
+      skill: skill ? { id: skill.id, name: skill.name, hits } : null,
+      hitDamages: hitDamages.length > 1 ? hitDamages : undefined,
     };
   }
 
