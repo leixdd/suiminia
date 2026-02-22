@@ -31,12 +31,15 @@ export class SwitchHeroWindow {
    * @param {Phaser.Scene} scene
    * @param {{ getTeam: () => import('../entities/Hero.js').Hero[], onSelect: (index: number) => void }} options
    */
-  constructor(scene, { getTeam, onSelect }) {
+  constructor(scene, { getTeam, onSelect, onHide }) {
     this.scene = scene;
     this.getTeam = getTeam;
     this.onSelect = onSelect;
+    this.onHide = onHide;
     this.selectedIndex = 0;
     this._keyDownHandler = this._onKeyDown.bind(this);
+    /** Capture-phase listener so ESC is consumed before Phaser/game can pause (same as SkillSelectionWindow). */
+    this._captureKeyDown = this._onCaptureKeyDown.bind(this);
 
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
@@ -75,7 +78,7 @@ export class SwitchHeroWindow {
     }
 
     this.hint = scene.add
-      .text(listX, panelY + PANEL_H / 2 - 22, '1 / 2 / 3 or click  ·  \u2191\u2193 scroll, Enter', {
+      .text(listX, panelY + PANEL_H / 2 - 22, '1 / 2 / 3 or click  ·  \u2191\u2193 scroll, Enter  ·  Esc close', {
         fontSize: 8,
         fontFamily: GAME_FONT,
         color: '#8b949e',
@@ -195,6 +198,14 @@ export class SwitchHeroWindow {
     }
 
     this.scene.input.keyboard.on('keydown', this._keyDownHandler);
+    window.addEventListener('keydown', this._captureKeyDown, true);
+  }
+
+  _onCaptureKeyDown(event) {
+    if (event.keyCode !== 27) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.hide();
   }
 
   hide() {
@@ -211,6 +222,8 @@ export class SwitchHeroWindow {
       row.zone.setVisible(false);
     }
     this.scene.input.keyboard.off('keydown', this._keyDownHandler);
+    window.removeEventListener('keydown', this._captureKeyDown, true);
+    this.onHide();
   }
 
   _setStatsVisible(visible) {
@@ -260,6 +273,15 @@ export class SwitchHeroWindow {
     if (aliveIndices.length === 0) return;
 
     const key = event.keyCode;
+    const handled = key === 27 || (key >= 49 && key <= 51) || key === 13 || key === 38 || key === 40;
+    if (!handled) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (key === 27) {
+      this.hide();
+      return;
+    }
     if (key >= 49 && key <= 51) {
       const index = key - 49;
       if (team[index].alive) {
@@ -274,14 +296,12 @@ export class SwitchHeroWindow {
       return;
     }
     if (key === 38) {
-      event.preventDefault();
       const idx = aliveIndices.indexOf(this.selectedIndex);
       const prev = idx <= 0 ? aliveIndices.length - 1 : idx - 1;
       this.selectedIndex = aliveIndices[prev];
       return;
     }
     if (key === 40) {
-      event.preventDefault();
       const idx = aliveIndices.indexOf(this.selectedIndex);
       const next = idx < 0 || idx >= aliveIndices.length - 1 ? 0 : idx + 1;
       this.selectedIndex = aliveIndices[next];

@@ -30,6 +30,8 @@ export class SkillSelectionWindow {
     this.onHide = onHide ?? (() => {});
     this.selectedIndex = 0;
     this._keyDownHandler = this._onKeyDown.bind(this);
+    /** Capture-phase listener so ESC is consumed before Phaser/game can pause (same as SwitchHeroWindow). */
+    this._captureKeyDown = this._onCaptureKeyDown.bind(this);
     /** @type {import('../data/skills.js').Skill[]} */
     this.skills = [];
 
@@ -66,7 +68,7 @@ export class SkillSelectionWindow {
     }
 
     this.hint = scene.add
-      .text(cx, cy + PANEL_H / 2 - 22, '1–4 or click  ·  \u2191\u2193 scroll, Enter', {
+      .text(cx, cy + PANEL_H / 2 - 22, '1–4 or click  ·  \u2191\u2193 scroll, Enter  ·  Esc cancel', {
         fontSize: 8,
         fontFamily: GAME_FONT,
         color: '#8b949e',
@@ -152,7 +154,15 @@ export class SkillSelectionWindow {
     }
 
     this.scene.input.keyboard.on('keydown', this._keyDownHandler);
+    window.addEventListener('keydown', this._captureKeyDown, true);
     this.sync();
+  }
+
+  _onCaptureKeyDown(event) {
+    if (event.keyCode !== 27) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.hide();
   }
 
   hide() {
@@ -169,6 +179,7 @@ export class SkillSelectionWindow {
       row.zone.setVisible(false);
     }
     this.scene.input.keyboard.off('keydown', this._keyDownHandler);
+    window.removeEventListener('keydown', this._captureKeyDown, true);
   }
 
   sync() {
@@ -180,6 +191,11 @@ export class SkillSelectionWindow {
 
   _onKeyDown(event) {
     const key = event.keyCode;
+    const handled = key >= 49 && key <= 52 || key === 13 || key === 27 || key === 38 || key === 40;
+    if (!handled) return;
+
+    event.preventDefault();
+    event.stopPropagation();
     if (key >= 49 && key <= 52) {
       const index = key - 49;
       if (index < this.skills.length) {
@@ -196,13 +212,11 @@ export class SkillSelectionWindow {
       return;
     }
     if (key === 38) {
-      event.preventDefault();
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.sync();
       return;
     }
     if (key === 40) {
-      event.preventDefault();
       this.selectedIndex = Math.min(this.skills.length - 1, this.selectedIndex + 1);
       this.sync();
       return;

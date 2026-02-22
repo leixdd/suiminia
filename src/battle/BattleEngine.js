@@ -61,6 +61,7 @@ export class BattleEngine {
 
   /**
    * Advance ATB by one tick. If in switch phase, no-op until switch is done.
+   * When the ready hero is staggered, they do not get a turn: their ATB is reset to 0 and no action is taken.
    */
   tick() {
     if (this.victorId !== null) return;
@@ -68,7 +69,13 @@ export class BattleEngine {
     if (this.currentTurnHero !== null) return;
 
     this.turnQueue.tick();
-    this.currentTurnHero = this.turnQueue.getCurrentTurn();
+    const ready = this.turnQueue.getCurrentTurn();
+    if (ready?.staggered) {
+      ready.consumeTurn();
+      this.currentTurnHero = null;
+    } else {
+      this.currentTurnHero = ready;
+    }
   }
 
   /**
@@ -77,6 +84,9 @@ export class BattleEngine {
    */
   actAttack(targetHero, options = {}) {
     if (this.currentTurnHero === null || !this.currentTurnHero.alive) {
+      return { damage: 0, targetAlive: targetHero?.alive ?? false };
+    }
+    if (this.currentTurnHero.staggered) {
       return { damage: 0, targetAlive: targetHero?.alive ?? false };
     }
     if (!targetHero?.alive) {
@@ -201,10 +211,10 @@ export class BattleEngine {
   requestVoluntarySwitch() {
     if (this.victorId !== null) return false;
     if (this.currentTurnHero === null || !this.playerTeam.includes(this.currentTurnHero)) return false;
-    this.currentTurnHero.clearStaggered();
-    this.currentTurnHero.clearGuarding();
-    this.currentTurnHero.consumeTurn();
-    this.currentTurnHero = null;
+    // this.currentTurnHero.clearStaggered();
+    // this.currentTurnHero.clearGuarding();
+    // this.currentTurnHero.consumeTurn();
+    // this.currentTurnHero = null;
     this.pendingPlayerSwitch = true;
     return true;
   }

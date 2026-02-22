@@ -109,9 +109,17 @@ export class BattleScene extends Phaser.Scene {
       getTeam: () => this.playerTeam,
       onSelect: (index) => {
         if (this.engine.selectNextPlayerHero(index)) {
+          const current = this.engine.currentTurnHero;
+          if (current) {
+            current.clearStaggered();
+            current.clearGuarding();
+            current.consumeTurn();
+            this.engine.currentTurnHero = null;
+          }
           this.playerActiveUI.setHero(this.engine.getPlayerActive());
         }
       },
+      onHide: () => { this.engine.pendingPlayerSwitch = false; },
     });
 
     this.victoryOverlay = new VictoryOverlay(this);
@@ -122,6 +130,7 @@ export class BattleScene extends Phaser.Scene {
       onGuard: () => this._onGuardClicked(),
       onSwitch: () => this._onSwitchClicked(),
       onSkill: () => this._onSkillClicked(),
+      onSkip: () => this._onSkipClicked(),
     });
 
     this.skillSelectionWindow = new SkillSelectionWindow(this, {
@@ -140,6 +149,7 @@ export class BattleScene extends Phaser.Scene {
       else if (event.keyCode === 68) this._onGuardClicked(); // D -> Guard
       else if (event.keyCode === 83) this._onSkillClicked(); // S -> Skill
       else if (event.keyCode === 81) this._onSwitchClicked(); // Q -> Switch
+      else if (event.keyCode === 80) this._onSkipClicked();  // P -> Skip
     });
 
     this.time.delayedCall(200, () => this.partyPanel.playIn());
@@ -244,6 +254,7 @@ export class BattleScene extends Phaser.Scene {
     this.commandBar.setButtonsVisible(!this.engine.isBattleOver());
     if (this._skillWindowOpen) {
       this.commandBar.setButtonsEnabled(false);
+      this.commandBar.setAttackEnabled(false);
       this.commandBar.setGuardEnabled(false);
       this.commandBar.setSkillEnabled(false);
       this.commandBar.setInstructions('Choose a skill', '1–4 or \u2191\u2193, Enter · Esc to cancel');
@@ -252,8 +263,9 @@ export class BattleScene extends Phaser.Scene {
     this.commandBar.setButtonsEnabled(canAct);
     const pActive = this.engine.getPlayerActive();
     const eActive = this.engine.getEnemyActive();
+    this.commandBar.setAttackEnabled(canAct && !pActive.staggered);
     this.commandBar.setGuardEnabled(canAct && !pActive.staggered);
-    this.commandBar.setSkillEnabled(canAct && this._getCurrentPlayerSkillIds().length > 0);
+    this.commandBar.setSkillEnabled(canAct && !pActive.staggered && this._getCurrentPlayerSkillIds().length > 0);
 
     if (this.engine.isBattleOver()) {
       this.commandBar.setInstructions('Battle over.', '');
@@ -266,7 +278,7 @@ export class BattleScene extends Phaser.Scene {
     const pct1 = Math.round(pActive.chargeProgress() * 100);
     const pct2 = Math.round(eActive.chargeProgress() * 100);
     if (current && this.playerTeam.includes(current)) {
-      this.commandBar.setInstructions('Your turn — choose an action.', 'A Attack · S Skill · D Guard · Q Switch');
+      this.commandBar.setInstructions('Your turn — choose an action.', 'A Attack · S Skill · D Guard · Q Switch · P Skip');
     } else if (current && this.enemyTeam.includes(current)) {
       this.commandBar.setInstructions("Enemy's turn.", 'They will act in a moment.');
     } else {
@@ -367,6 +379,13 @@ export class BattleScene extends Phaser.Scene {
     this.engine.actGuard();
   }
 
+  _onSkipClicked() {
+    const current = this.engine.currentTurnHero;
+    if (!current || !this.playerTeam.includes(current)) return;
+    showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Skip!');
+    this.engine.actPass();
+  }
+
   _onSwitchClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
@@ -377,6 +396,7 @@ export class BattleScene extends Phaser.Scene {
   _onAttackClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
+    if (current.staggered) return;
     const target = this.engine.getEnemyActive();
     if (!target.alive) return;
     showCommandPop(this, this.playerCard.x, this.playerCard.y, 'Attack!');
@@ -394,6 +414,7 @@ export class BattleScene extends Phaser.Scene {
   _onSkillClicked() {
     const current = this.engine.currentTurnHero;
     if (!current || !this.playerTeam.includes(current)) return;
+    if (current.staggered) return;
     const target = this.engine.getEnemyActive();
     if (!target.alive) return;
     const skillIds = this._getCurrentPlayerSkillIds();
@@ -403,6 +424,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   _onSkillSelected(skillId) {
+    const current = this.engine.currentTurnHero;
+    if (current?.staggered) return;
     const target = this.engine.getEnemyActive();
     if (!target?.alive) return;
     const skill = getSkillById(skillId);

@@ -33,7 +33,7 @@ export class Hero {
 
     /** Stagger meter 0..MAX_STAGGER. Fills when hit while guarding; when full, hero becomes staggered and meter resets. */
     this.stagger = 0;
-    /** When true, this hero is Staggered and takes STAGGERED_DAMAGE_MULTIPLIER (200%) damage. Cleared when hero acts. */
+    /** When true, this hero is Staggered: takes extra damage, cannot Attack/Guard/Skill (only Skip/Switch); cleared when hero acts. */
     this.staggered = false;
 
     /** Battle stats (reset per battle, updated by BattleEngine) */
@@ -61,6 +61,7 @@ export class Hero {
     if (this.stagger >= MAX_STAGGER) {
       this.staggered = true;
       this.stagger = 0;
+      this.charge = 0; // Reset ATB when staggered
       this.clearGuarding(); // Guarding is disabled while staggered
     }
   }
